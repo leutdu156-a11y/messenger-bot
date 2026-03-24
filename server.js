@@ -30,6 +30,9 @@ Phong cách:
 - Nếu khách xưng hô là cô, chú hoặc bác thì chuyển sang xưng con và gọi đúng là cô/chú/bác
 - Không xưng hô bằng mình
 - Không gọi khách là bạn
+- Trình bày tin nhắn đẹp trên Messenger mobile bằng icon nhẹ như 🌾 💰 📞 📍 ✅ khi phù hợp
+- Làm nổi thông tin quan trọng như tên gạo, giá, số điện thoại, địa chỉ bằng cách xuống dòng rõ và có thể dùng dạng 【...】
+- Không dùng markdown kiểu **in đậm** vì không hiển thị ổn định trên Messenger mobile
 
 Nguyên tắc tư vấn:
 1. Nếu khách chưa nói rõ nhu cầu, hãy hỏi ngắn gọn:
@@ -198,29 +201,30 @@ const COMPLAINT_REPLY =
   `Dạ em rất xin lỗi anh/chị về trải nghiệm chưa tốt ạ.
 
 Anh/chị gửi giúp em:
-- số điện thoại
-- mã đơn hoặc thời gian nhận hàng
-- vấn đề mình đang gặp
+- 📞 Số điện thoại
+- 🧾 Mã đơn hoặc thời gian nhận hàng
+- ⚠️ Vấn đề mình đang gặp
 
 Em xin chuyển ngay bộ phận hỗ trợ liên hệ anh/chị sớm ạ.`;
 const WELCOME_TEXT =
   `Dạ em chào anh/chị ạ 🌾
-Vựa Gạo Sóc Trăng hiện có gạo ăn gia đình và gạo cho quán ăn.
+Em là tư vấn bên 【Vựa Gạo Sóc Trăng】.
 
+Bên em hiện có gạo ăn gia đình và gạo cho quán ăn.
 Anh/chị đang cần dòng cơm dẻo ngon cho gia đình hay loại giá tốt cho quán ạ?`;
 const ORDER_NOW_TEXT = `Dạ em lên đơn cho anh/chị ngay ạ.
 
 Anh/chị gửi giúp em:
-- loại gạo
-- số kg
-- tên người nhận
-- số điện thoại
-- địa chỉ giao hàng`;
+- 🌾 Loại gạo
+- ⚖️ Số kg
+- 👤 Tên người nhận
+- 📞 Số điện thoại
+- 📍 Địa chỉ giao hàng`;
 const INDECISIVE_REPLY = `Dạ để em gợi ý nhanh cho anh/chị nhé:
 
-- ST25: thơm, hạt đẹp, hợp ăn gia đình
-- ST21: mềm dẻo, dễ ăn
-- Thơm Lài: giá nhẹ hơn, cơm vẫn ngon
+- 🌾 【ST25】: thơm, hạt đẹp, hợp ăn gia đình
+- 🌾 【ST21】: mềm dẻo, dễ ăn
+- 🌾 【Thơm Lài】: giá nhẹ hơn, cơm vẫn ngon
 
 Anh/chị đang nghiêng về loại ngon nổi bật hay loại tiết kiệm hơn ạ?`;
 const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiên:
@@ -235,6 +239,8 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu khách hỏi xuất hóa đơn hoặc nội dung chưa có dữ liệu: trả lời "Dạ phần này em xin phép báo lại anh/chị, bên em sẽ kiểm tra và phản hồi sớm ạ."
 - Nếu khách hỏi gọi trực tiếp: mời liên hệ hotline/Zalo 0762234135.
 - Nếu khách chưa biết chọn loại nào: dùng flow gợi ý ngắn gọn giữa ST25, ST21 và Thơm Lài.
+- Khi có tên gạo, giá, số điện thoại hoặc địa chỉ quan trọng: ưu tiên đặt trên dòng riêng với icon như 🌾 💰 📞 📍 để khách dễ đọc.
+- Có thể làm nổi thông tin quan trọng bằng dạng 【ST25】, 【28.000 đ/kg】, 【0762234135】.
 - Không được nói 504, tồn kho, quy cách bao, thời gian giao cụ thể hoặc cam kết giao nhanh nếu dữ liệu hiện tại chưa xác nhận.`;
 const STORE_NAME = "Vựa Gạo Sóc Trăng";
 const STORE_HOTLINE = "0762234135";
@@ -299,6 +305,14 @@ function renderInfoPage(title, bodyHtml) {
     </main>
   </body>
 </html>`;
+}
+
+function emphasizeValue(value) {
+  return `【${value}】`;
+}
+
+function formatProductListLine(product) {
+  return `🌾 ${emphasizeValue(product.name)}  •  💰 ${product.price}`;
 }
 
 function pruneSeenMessageIds() {
@@ -523,22 +537,22 @@ function getNextOrderField(orderData) {
 
 function getOrderFieldPrompt(field) {
   if (field === "productName") {
-    return "Dạ anh/chị muốn lấy loại gạo nào ạ?";
+    return "🌾 Dạ anh/chị muốn lấy loại gạo nào ạ?";
   }
 
   if (field === "quantityKg") {
-    return "Dạ anh/chị cần khoảng bao nhiêu kg ạ?";
+    return "⚖️ Dạ anh/chị cần khoảng bao nhiêu kg ạ?";
   }
 
   if (field === "recipientName") {
-    return "Dạ anh/chị cho em xin tên người nhận giúp em nhé.";
+    return "👤 Dạ anh/chị cho em xin tên người nhận giúp em nhé.";
   }
 
   if (field === "phone") {
-    return "Dạ anh/chị cho em xin số điện thoại nhận hàng ạ.";
+    return "📞 Dạ anh/chị cho em xin số điện thoại nhận hàng ạ.";
   }
 
-  return "Dạ anh/chị gửi giúp em địa chỉ giao hàng đầy đủ nhé.";
+  return "📍 Dạ anh/chị gửi giúp em địa chỉ giao hàng đầy đủ nhé.";
 }
 
 function detectOrderFieldFromText(messageText) {
@@ -640,11 +654,11 @@ function buildNextOrderReply(session) {
 
     const summary = `Dạ em xin phép chốt lại đơn của anh/chị:
 
-- Loại gạo: ${session.order.data.productName}
-- Số lượng: ${session.order.data.quantityKg} kg
-- Người nhận: ${session.order.data.recipientName}
-- SĐT: ${session.order.data.phone}
-- Địa chỉ: ${session.order.data.address}
+🌾 Loại gạo: ${emphasizeValue(session.order.data.productName)}
+⚖️ Số lượng: ${emphasizeValue(`${session.order.data.quantityKg} kg`)}
+👤 Người nhận: ${emphasizeValue(session.order.data.recipientName)}
+📞 SĐT: ${emphasizeValue(session.order.data.phone)}
+📍 Địa chỉ: ${emphasizeValue(session.order.data.address)}
 
 Anh/chị xác nhận giúp em để bên em lên đơn ạ.`;
 
@@ -688,7 +702,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (!product) {
       return {
-        text: "Dạ em chưa nhận ra loại gạo ạ. Anh/chị nhắn lại giúp em tên như ST25, ST21, Thơm Lài hoặc Tấm Thơm nhé?",
+        text: "🌾 Dạ em chưa nhận ra loại gạo ạ. Anh/chị nhắn lại giúp em tên như ST25, ST21, Thơm Lài hoặc Tấm Thơm nhé?",
       };
     }
 
@@ -701,7 +715,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (!quantityKg) {
       return {
-        text: "Dạ anh/chị ghi rõ giúp em số kg, ví dụ 10kg hoặc 25kg nhé?",
+        text: "⚖️ Dạ anh/chị ghi rõ giúp em số kg, ví dụ 10kg hoặc 25kg nhé?",
       };
     }
 
@@ -719,7 +733,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (phone.length < 9 || phone.length > 11) {
       return {
-        text: "Dạ số điện thoại này chưa đúng định dạng ạ. Anh/chị gửi lại giúp em số nhận hàng nhé?",
+        text: "📞 Dạ số điện thoại này chưa đúng định dạng ạ. Anh/chị gửi lại giúp em số nhận hàng nhé?",
       };
     }
 
@@ -729,7 +743,7 @@ function setOrderFieldValue(session, field, messageText) {
 
   if (messageText.trim().length < 5) {
     return {
-      text: "Dạ anh/chị gửi giúp em địa chỉ giao hàng rõ hơn một chút để bên em lên đơn nhé.",
+      text: "📍 Dạ anh/chị gửi giúp em địa chỉ giao hàng rõ hơn một chút để bên em lên đơn nhé.",
     };
   }
 
@@ -780,9 +794,9 @@ function handleOrderStep(session, messageText) {
       )
     ) {
       console.log("order lead captured:", session.order.data);
-      const confirmationText = `Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
+      const confirmationText = `✅ Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
 
-Bên em sẽ liên hệ xác nhận sớm qua số ${session.order.data.phone}.
+Bên em sẽ liên hệ xác nhận sớm qua số ${emphasizeValue(session.order.data.phone)}.
 Anh/chị để ý điện thoại giúp em nhé.`;
       resetOrder(session);
 
@@ -800,12 +814,12 @@ Anh/chị để ý điện thoại giúp em nhé.`;
       session.order.awaitingConfirmation = false;
       session.order.editingField = "select";
       return {
-        text: "Dạ anh/chị muốn chỉnh mục nào ạ: loại gạo, số kg, tên người nhận, số điện thoại hay địa chỉ?",
+        text: "✏️ Dạ anh/chị muốn chỉnh mục nào ạ: loại gạo, số kg, tên người nhận, số điện thoại hay địa chỉ?",
       };
     }
 
     return {
-      text: "Dạ anh/chị xác nhận giúp em để bên em lên đơn ạ. Nếu cần sửa, anh/chị nhắn tên mục cần chỉnh giúp em nhé.",
+      text: "✅ Dạ anh/chị xác nhận giúp em để bên em lên đơn ạ. Nếu cần sửa, anh/chị nhắn tên mục cần chỉnh giúp em nhé.",
     };
   }
 
@@ -929,9 +943,9 @@ function buildFamilyRiceReply() {
   return {
     text: `Dạ với nhu cầu gia đình, bên em có vài dòng được hỏi nhiều:
 
-- ST25: thơm, hạt đẹp
-- ST21: mềm dẻo, dễ ăn
-- Nàng Hoa, Thơm Lài: dễ ăn, giá nhẹ hơn
+- 🌾 【ST25】: thơm, hạt đẹp
+- 🌾 【ST21】: mềm dẻo, dễ ăn
+- 🌾 【Nàng Hoa】, 【Thơm Lài】: dễ ăn, giá nhẹ hơn
 
 Anh/chị thích cơm dẻo nhiều, mềm hay tơi vừa để em gợi ý chuẩn hơn ạ?`,
     includeMenu: true,
@@ -948,15 +962,15 @@ Anh/chị đang cần cơm nở nhiều, mềm hay dẻo vừa để em gợi ý
 }
 
 function buildPriceListReply() {
-  const lines = PRODUCT_CATALOG.map(
-    (product) => `- ${product.name}: ${product.price}`,
-  );
+  const lines = PRODUCT_CATALOG.map((product) => formatProductListLine(product));
 
   return {
     text: `Dạ em gửi anh/chị bảng giá tham khảo bên em ạ:
 ${lines.join("\n")}
 
-Hiện bên em có ưu đãi mua 10kg tặng 1kg, và freeship từ 20kg.
+🎁 Ưu đãi: mua 10kg tặng 1kg
+🚚 Freeship: từ 20kg
+
 Anh/chị đang quan tâm loại nào để em tư vấn nhanh hơn ạ?`,
     includeMenu: true,
   };
@@ -1052,8 +1066,8 @@ function maybePrefixGreeting(session, responseText) {
   }
 
   session.greeted = true;
-  return `Dạ em chào anh/chị ạ.
-Em là tư vấn bên Vựa Gạo Sóc Trăng.
+  return `🌾 Dạ em chào anh/chị ạ.
+Em là tư vấn bên ${emphasizeValue(STORE_NAME)}.
 
 ${responseText}`;
 }
@@ -1067,7 +1081,7 @@ async function buildBotResponse(session, messageText, menuPayload) {
     if (isCancelOrderRequest(messageText)) {
       resetOrder(session);
       return {
-        text: "Dạ em đã dừng tạo đơn rồi ạ. Anh/chị muốn em tư vấn lại loại gạo nào tiếp ạ?",
+        text: "✅ Dạ em đã dừng tạo đơn rồi ạ. Anh/chị muốn em tư vấn lại loại gạo nào tiếp ạ?",
         includeMenu: true,
       };
     }
@@ -1091,7 +1105,7 @@ async function buildBotResponse(session, messageText, menuPayload) {
   if (isDirectCallRequest(messageText)) {
     resetOrder(session);
     return {
-      text: `Dạ anh/chị có thể liên hệ hotline/Zalo: ${STORE_HOTLINE} ạ.
+      text: `📞 Hotline/Zalo: ${emphasizeValue(STORE_HOTLINE)}
 
 Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại cho anh/chị nhé.`,
       includeMenu: true,
