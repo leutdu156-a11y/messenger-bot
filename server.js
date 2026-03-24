@@ -230,9 +230,70 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu khách hỏi gọi trực tiếp: mời liên hệ hotline/Zalo 0762234135.
 - Nếu khách chưa biết chọn loại nào: dùng flow gợi ý ngắn gọn giữa ST25, ST21 và Thơm Lài.
 - Không được nói 504, tồn kho, quy cách bao, thời gian giao cụ thể hoặc cam kết giao nhanh nếu dữ liệu hiện tại chưa xác nhận.`;
+const STORE_NAME = "Vựa Gạo Sóc Trăng";
+const STORE_HOTLINE = "0762234135";
+const STORE_WEBSITE = "https://gaosoctrang.com";
+const STORE_FACEBOOK =
+  "https://www.facebook.com/share/1M1YpUFBnr/?mibextid=wwXIfr";
 
 app.disable("x-powered-by");
 app.use(express.json());
+
+function renderInfoPage(title, bodyHtml) {
+  return `<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f8faf7;
+        color: #17211a;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px 56px;
+        line-height: 1.6;
+      }
+
+      h1, h2 {
+        line-height: 1.25;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #d8e3d2;
+        border-radius: 16px;
+        padding: 24px;
+        margin-top: 20px;
+      }
+
+      a {
+        color: #0f6b38;
+      }
+
+      ul {
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${title}</h1>
+      ${bodyHtml}
+    </main>
+  </body>
+</html>`;
+}
 
 function pruneSeenMessageIds() {
   const now = Date.now();
@@ -1131,6 +1192,63 @@ async function processWebhook(body) {
     }
   }
 }
+
+app.get("/privacy-policy", (_req, res) => {
+  const html = renderInfoPage(
+    "Chính Sách Quyền Riêng Tư",
+    `<div class="card">
+      <p><strong>${STORE_NAME}</strong> vận hành chatbot Messenger để tư vấn sản phẩm, báo giá và hỗ trợ đặt hàng.</p>
+      <p>Chatbot có thể thu thập và xử lý các thông tin anh/chị chủ động cung cấp như nội dung tin nhắn, loại gạo quan tâm, số kg, tên người nhận, số điện thoại và địa chỉ giao hàng.</p>
+      <p>Dữ liệu được dùng để:</p>
+      <ul>
+        <li>trả lời tin nhắn và tư vấn sản phẩm;</li>
+        <li>hỗ trợ tiếp nhận và xác nhận đơn hàng;</li>
+        <li>chăm sóc khách hàng khi có yêu cầu hoặc khiếu nại.</li>
+      </ul>
+      <p>Để tạo phản hồi tự động, nội dung tin nhắn có thể được xử lý bởi nhà cung cấp dịch vụ AI của bên em. Bên em không bán dữ liệu cá nhân cho bên thứ ba.</p>
+      <p>Nếu cần liên hệ về quyền riêng tư hoặc dữ liệu cá nhân, anh/chị có thể nhắn trực tiếp fanpage, gọi/Zalo <a href="tel:${STORE_HOTLINE}">${STORE_HOTLINE}</a>, hoặc truy cập website <a href="${STORE_WEBSITE}">${STORE_WEBSITE}</a>.</p>
+    </div>`,
+  );
+
+  res.status(200).type("html").send(html);
+});
+
+app.get("/terms-of-service", (_req, res) => {
+  const html = renderInfoPage(
+    "Điều Khoản Dịch Vụ",
+    `<div class="card">
+      <p>Chatbot Messenger của <strong>${STORE_NAME}</strong> được dùng để tư vấn sản phẩm, báo giá và tiếp nhận thông tin đặt hàng.</p>
+      <p>Khi sử dụng chatbot, anh/chị đồng ý cung cấp các thông tin cần thiết để bên em hỗ trợ tư vấn hoặc xử lý đơn hàng như tên người nhận, số điện thoại và địa chỉ giao hàng khi cần.</p>
+      <p>Chatbot chỉ cung cấp thông tin tham khảo tại thời điểm trao đổi. Với các nội dung cần xác nhận thêm như tồn kho, lịch giao cụ thể hoặc thông tin ngoài dữ liệu sẵn có, bên em sẽ kiểm tra lại trước khi phản hồi.</p>
+      <p>Nếu cần hỗ trợ trực tiếp, anh/chị có thể liên hệ hotline/Zalo <a href="tel:${STORE_HOTLINE}">${STORE_HOTLINE}</a>, website <a href="${STORE_WEBSITE}">${STORE_WEBSITE}</a> hoặc fanpage <a href="${STORE_FACEBOOK}">${STORE_FACEBOOK}</a>.</p>
+    </div>`,
+  );
+
+  res.status(200).type("html").send(html);
+});
+
+app.get("/data-deletion", (_req, res) => {
+  const html = renderInfoPage(
+    "Hướng Dẫn Xóa Dữ Liệu Người Dùng",
+    `<div class="card">
+      <p>Nếu anh/chị muốn yêu cầu xóa dữ liệu đã gửi qua chatbot Messenger của <strong>${STORE_NAME}</strong>, vui lòng làm theo một trong các cách sau:</p>
+      <ol>
+        <li>Nhắn trực tiếp vào fanpage và ghi rõ yêu cầu xóa dữ liệu.</li>
+        <li>Liên hệ hotline/Zalo <a href="tel:${STORE_HOTLINE}">${STORE_HOTLINE}</a>.</li>
+      </ol>
+      <p>Khi gửi yêu cầu, anh/chị vui lòng cung cấp thông tin để bên em đối chiếu:</p>
+      <ul>
+        <li>tên hoặc tài khoản Facebook đã nhắn tin;</li>
+        <li>số điện thoại đã cung cấp cho đơn hàng, nếu có;</li>
+        <li>nội dung yêu cầu xóa dữ liệu.</li>
+      </ul>
+      <p>Sau khi xác minh, bên em sẽ xử lý yêu cầu trong thời gian phù hợp theo quy trình hỗ trợ khách hàng.</p>
+      <p>Fanpage liên hệ: <a href="${STORE_FACEBOOK}">${STORE_FACEBOOK}</a></p>
+    </div>`,
+  );
+
+  res.status(200).type("html").send(html);
+});
 
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
