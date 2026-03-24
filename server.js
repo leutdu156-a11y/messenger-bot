@@ -80,9 +80,46 @@ Quy tắc dùng thông tin:
 - Khi phù hợp, có thể nhắc hotline/Zalo, website hoặc Facebook để tăng độ tin tưởng`;
 const FALLBACK_REPLY =
   "Dạ em đã nhận được tin nhắn, bên em sẽ phản hồi sớm ạ.";
+const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
+const seenMessageIds = new Map();
 
 app.disable("x-powered-by");
 app.use(express.json());
+
+function pruneSeenMessageIds() {
+  const now = Date.now();
+
+  for (const [messageId, expiresAt] of seenMessageIds.entries()) {
+    if (expiresAt <= now) {
+      seenMessageIds.delete(messageId);
+    }
+  }
+}
+
+function markMessageAsSeen(messageId) {
+  if (!messageId) {
+    return false;
+  }
+
+  pruneSeenMessageIds();
+
+  if (seenMessageIds.has(messageId)) {
+    return true;
+  }
+
+  seenMessageIds.set(messageId, Date.now() + SEEN_MESSAGE_TTL_MS);
+  return false;
+}
+
+function formatError(error) {
+  return {
+    name: error?.name,
+    message: error?.message,
+    status: error?.status,
+    code: error?.code,
+    type: error?.type,
+  };
+}
 
 async function generateReplyText(messageText) {
   if (!openai) {
@@ -91,10 +128,8 @@ async function generateReplyText(messageText) {
 
   const response = await openai.responses.create({
     model: openaiModel,
-    input: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: messageText },
-    ],
+    instructions: SYSTEM_PROMPT,
+    input: messageText,
   });
 
   const replyText = response.output_text?.trim();
@@ -141,6 +176,7 @@ async function handleMessagingEvent(event) {
     return;
   }
 
+  const messageId = event?.message?.mid;
   const senderId = event?.sender?.id;
   const messageText = event?.message?.text?.trim();
 
@@ -148,14 +184,19 @@ async function handleMessagingEvent(event) {
     return;
   }
 
-  console.log("incoming message:", { senderId, text: messageText });
+  if (markMessageAsSeen(messageId)) {
+    console.log("duplicate message skipped:", { senderId, messageId });
+    return;
+  }
+
+  console.log("incoming message:", { senderId, messageId, text: messageText });
 
   let replyText = FALLBACK_REPLY;
 
   try {
     replyText = await generateReplyText(messageText);
   } catch (error) {
-    console.error("OpenAI reply failed:", error);
+    console.error("OpenAI reply failed:", formatError(error));
   }
 
   console.log("reply text:", replyText);
@@ -163,7 +204,7 @@ async function handleMessagingEvent(event) {
   try {
     await sendMessengerText(senderId, replyText);
   } catch (error) {
-    console.error("Messenger send failed:", error);
+    console.error("Messenger send failed:", formatError(error));
   }
 }
 
@@ -205,7 +246,7 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 
   void processWebhook(req.body).catch((error) => {
-    console.error("Webhook processing failed:", error);
+    console.error("Webhook processing failed:", formatError(error));
   });
 });
 
