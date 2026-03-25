@@ -174,28 +174,49 @@ const PRODUCT_CATALOG = [
   {
     name: "Gạo Thơm Dẻo ST21",
     price: "20.000 đ/kg",
-    aliases: ["gao thom deo st21", "thom deo st21", "st21"],
+    aliases: ["gao thom deo st21", "thom deo st21", "st21", "st 21", "st-21"],
   },
   {
     name: "Gạo Thơm Dẻo Sữa ST21",
     price: "22.000 đ/kg",
-    aliases: ["gao thom deo sua st21", "thom deo sua st21", "sua st21"],
+    aliases: [
+      "gao thom deo sua st21",
+      "thom deo sua st21",
+      "sua st21",
+      "st 21 sua",
+      "st-21 sua",
+    ],
   },
   {
     name: "Nếp Dẻo Long An",
     price: "25.000 đ/kg",
     aliases: ["nep deo long an", "long an"],
   },
-  { name: "Gạo ST25", price: "28.000 đ/kg", aliases: ["gao st25", "st25"] },
+  {
+    name: "Gạo ST25",
+    price: "28.000 đ/kg",
+    aliases: ["gao st25", "st25", "st 25", "st-25"],
+  },
   {
     name: "Gạo ST25 thường",
     price: "25.000 đ/kg",
-    aliases: ["gao st25 thuong", "st25 thuong"],
+    aliases: [
+      "gao st25 thuong",
+      "st25 thuong",
+      "st 25 thuong",
+      "st-25 thuong",
+    ],
   },
   {
     name: "Gạo ST25 Lúa Tôm",
     price: "32.000 đ/kg",
-    aliases: ["gao st25 lua tom", "st25 lua tom", "lua tom"],
+    aliases: [
+      "gao st25 lua tom",
+      "st25 lua tom",
+      "st 25 lua tom",
+      "st-25 lua tom",
+      "lua tom",
+    ],
   },
   {
     name: "Gạo lứt Huyết Rồng",
@@ -796,11 +817,17 @@ Tin nhắn mới của khách: ${messageText}`;
 
 function findProductByText(messageText) {
   const normalizedText = normalizeText(messageText);
+  const compactNormalizedText = normalizedText.replace(/\s+/g, "");
   const matches = [];
 
   for (const product of PRODUCT_CATALOG) {
     for (const alias of product.aliases) {
-      if (normalizedText.includes(alias)) {
+      const compactAlias = alias.replace(/\s+/g, "");
+
+      if (
+        normalizedText.includes(alias) ||
+        compactNormalizedText.includes(compactAlias)
+      ) {
         matches.push({ product, aliasLength: alias.length });
       }
     }
@@ -812,10 +839,11 @@ function findProductByText(messageText) {
 
 function isGenericSt25Mention(messageText) {
   const normalizedText = normalizeText(messageText);
+  const compactNormalizedText = normalizedText.replace(/\s+/g, "");
 
   return (
-    normalizedText.includes("st25") &&
-    !normalizedText.includes("st25 thuong") &&
+    compactNormalizedText.includes("st25") &&
+    !compactNormalizedText.includes("st25thuong") &&
     !normalizedText.includes("lua tom")
   );
 }
