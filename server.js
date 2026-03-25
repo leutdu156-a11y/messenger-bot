@@ -32,7 +32,7 @@ Phong cách:
 - Không xưng hô bằng mình
 - Không gọi khách là bạn
 - Trình bày tin nhắn đẹp trên Messenger mobile bằng icon nhẹ như 🌾 💰 📞 📍 ✅ khi phù hợp
-- Làm nổi thông tin quan trọng như tên gạo, giá, số điện thoại, địa chỉ bằng cách xuống dòng rõ và có thể dùng dạng 【...】
+- Làm nổi thông tin quan trọng bằng cách xuống dòng rõ, không dùng ký hiệu rườm rà
 - Không dùng markdown kiểu **in đậm** vì không hiển thị ổn định trên Messenger mobile
 
 Nguyên tắc tư vấn:
@@ -103,12 +103,15 @@ Danh sách sản phẩm:
 
 Cách trả lời:
 - Ưu tiên câu ngắn
-- Mặc định chỉ trả lời 1-2 câu ngắn hoặc 2-4 dòng ngắn
+- Mặc định chỉ trả lời 1-2 câu ngắn hoặc tối đa 3 dòng ngắn
 - Chỉ dài hơn khi khách yêu cầu bảng giá, so sánh hoặc đang ở bước chốt đơn
 - Có thể xuống dòng cho dễ đọc
 - Không nhắc lại thông tin khách vừa nói
 - Không giải thích dài dòng nếu khách chỉ hỏi ngắn
 - Mỗi tin chỉ nên có 1 ý chính và 1 câu hỏi dẫn tiếp
+- Mỗi tin chỉ 1 ý chính
+- Chỉ hỏi lại đúng 1 câu
+- Không liệt kê quá 2 lựa chọn trong một tin, trừ khi khách yêu cầu xem bảng giá
 - Luôn kết thúc bằng 1 câu hỏi dẫn dắt nếu khách chưa chốt`;
 const FALLBACK_REPLY =
   "Dạ em đã nhận được tin nhắn, bên em sẽ phản hồi sớm ạ.";
@@ -213,8 +216,6 @@ Anh/chị gửi giúp em:
 Em xin chuyển ngay bộ phận hỗ trợ liên hệ anh/chị sớm ạ.`;
 const WELCOME_TEXT =
   `Dạ em chào anh/chị ạ 🌾
-Em là tư vấn bên 【Vựa Gạo Sóc Trăng】.
-
 Bên em hiện có gạo ăn gia đình và gạo cho quán ăn.
 Anh/chị đang cần dòng cơm dẻo ngon cho gia đình hay loại giá tốt cho quán ạ?`;
 const ORDER_NOW_TEXT = `Dạ em lên đơn cho anh/chị ngay ạ.
@@ -227,9 +228,8 @@ Anh/chị gửi giúp em:
 - 📍 Địa chỉ giao hàng`;
 const INDECISIVE_REPLY = `Dạ để em gợi ý nhanh cho anh/chị nhé:
 
-- 🌾 【ST25】: thơm, hạt đẹp, hợp ăn gia đình
-- 🌾 【ST21】: mềm dẻo, dễ ăn
-- 🌾 【Thơm Lài】: giá nhẹ hơn, cơm vẫn ngon
+- 🌾 ST25: thơm, hạt đẹp
+- 🌾 ST21: mềm dẻo, dễ ăn
 
 Anh/chị đang nghiêng về loại ngon nổi bật hay loại tiết kiệm hơn ạ?`;
 const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiên:
@@ -247,8 +247,10 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu chỉ cần hỏi lại nhu cầu: chỉ hỏi 1 câu ngắn, không viết thêm phần mở rộng.
 - Nếu khách hỏi 1 loại gạo cụ thể: trả lời thẳng vào loại đó, không lan sang quá nhiều loại khác.
 - Không gửi đoạn văn dài khi chỉ cần 1 câu trả lời ngắn.
+- Mỗi tin chỉ 1 ý chính.
+- Chỉ hỏi lại đúng 1 câu.
+- Không đưa quá 2 lựa chọn trong một tin, trừ khi khách yêu cầu xem bảng giá.
 - Khi có tên gạo, giá, số điện thoại hoặc địa chỉ quan trọng: ưu tiên đặt trên dòng riêng với icon như 🌾 💰 📞 📍 để khách dễ đọc.
-- Có thể làm nổi thông tin quan trọng bằng dạng 【ST25】, 【28.000 đ/kg】, 【0762234135】.
 - Không được nói 504, tồn kho, quy cách bao, thời gian giao cụ thể hoặc cam kết giao nhanh nếu dữ liệu hiện tại chưa xác nhận.`;
 const STORE_NAME = "Vựa Gạo Sóc Trăng";
 const STORE_HOTLINE = "0762234135";
@@ -315,12 +317,8 @@ function renderInfoPage(title, bodyHtml) {
 </html>`;
 }
 
-function emphasizeValue(value) {
-  return `【${value}】`;
-}
-
 function formatProductListLine(product) {
-  return `🌾 ${emphasizeValue(product.name)}  •  💰 ${product.price}`;
+  return `🌾 ${product.name}  •  💰 ${product.price}`;
 }
 
 function pruneSeenMessageIds() {
@@ -662,11 +660,11 @@ function buildNextOrderReply(session) {
 
     const summary = `Dạ em xin phép chốt lại đơn của anh/chị:
 
-🌾 Loại gạo: ${emphasizeValue(session.order.data.productName)}
-⚖️ Số lượng: ${emphasizeValue(`${session.order.data.quantityKg} kg`)}
-👤 Người nhận: ${emphasizeValue(session.order.data.recipientName)}
-📞 SĐT: ${emphasizeValue(session.order.data.phone)}
-📍 Địa chỉ: ${emphasizeValue(session.order.data.address)}
+🌾 Loại gạo: ${session.order.data.productName}
+⚖️ Số lượng: ${session.order.data.quantityKg} kg
+👤 Người nhận: ${session.order.data.recipientName}
+📞 SĐT: ${session.order.data.phone}
+📍 Địa chỉ: ${session.order.data.address}
 
 Anh/chị xác nhận giúp em để bên em lên đơn ạ.`;
 
@@ -804,7 +802,7 @@ function handleOrderStep(session, messageText) {
       console.log("order lead captured:", session.order.data);
       const confirmationText = `✅ Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
 
-Bên em sẽ liên hệ xác nhận sớm qua số ${emphasizeValue(session.order.data.phone)}.
+Bên em sẽ liên hệ xác nhận sớm qua số ${session.order.data.phone}.
 Anh/chị để ý điện thoại giúp em nhé.`;
       resetOrder(session);
 
@@ -949,13 +947,12 @@ function isDirectCallRequest(messageText) {
 
 function buildFamilyRiceReply() {
   return {
-    text: `Dạ với nhu cầu gia đình, bên em có vài dòng được hỏi nhiều:
+    text: `Dạ với nhu cầu gia đình, em gợi ý 2 loại dễ chọn:
 
-- 🌾 【ST25】: thơm, hạt đẹp
-- 🌾 【ST21】: mềm dẻo, dễ ăn
-- 🌾 【Nàng Hoa】, 【Thơm Lài】: dễ ăn, giá nhẹ hơn
+- 🌾 ST25: thơm, hạt đẹp
+- 🌾 ST21: mềm dẻo, dễ ăn
 
-Anh/chị thích cơm dẻo nhiều, mềm hay tơi vừa để em gợi ý chuẩn hơn ạ?`,
+Anh/chị thích cơm dẻo nhiều hay dẻo vừa ạ?`,
     includeMenu: true,
   };
 }
@@ -964,7 +961,7 @@ function buildRestaurantRiceReply() {
   return {
     text: `Dạ nếu anh/chị mua cho quán ăn, em sẽ ưu tiên dòng cơm ổn định và giá hợp lý ạ.
 
-Anh/chị đang cần cơm nở nhiều, mềm hay dẻo vừa để em gợi ý đúng hơn ạ?`,
+Anh/chị đang cần cơm nở nhiều hay dẻo vừa ạ?`,
     includeMenu: true,
   };
 }
@@ -1076,8 +1073,6 @@ function maybePrefixGreeting(session, responseText) {
 
   session.greeted = true;
   return `🌾 Dạ em chào anh/chị ạ.
-Em là tư vấn bên ${emphasizeValue(STORE_NAME)}.
-
 ${responseText}`;
 }
 
@@ -1114,7 +1109,7 @@ async function buildBotResponse(session, messageText, menuPayload) {
   if (isDirectCallRequest(messageText)) {
     resetOrder(session);
     return {
-      text: `📞 Hotline/Zalo: ${emphasizeValue(STORE_HOTLINE)}
+      text: `📞 Hotline/Zalo: ${STORE_HOTLINE}
 
 Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại cho anh/chị nhé.`,
       includeMenu: true,
