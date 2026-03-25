@@ -498,8 +498,8 @@ function replaceCustomerTitleVariants(text, customer) {
   }
 
   return text
-    .replace(/\bAnh\/chị\b/gu, capitalizeFirstLetter(customer))
-    .replace(/\banh\/chị\b/gu, customer)
+    .replace(/Anh\/chị/gu, "__CUSTOMER_CAP__")
+    .replace(/anh\/chị/gu, "__CUSTOMER__")
     .replace(/\bAnh\b/gu, capitalizeFirstLetter(customer))
     .replace(/\banh\b/gu, customer)
     .replace(/\bChị\b/gu, capitalizeFirstLetter(customer))
@@ -513,7 +513,9 @@ function replaceCustomerTitleVariants(text, customer) {
     .replace(/\bMình\b/gu, capitalizeFirstLetter(customer))
     .replace(/\bmình\b/gu, customer)
     .replace(/\bBạn\b/gu, capitalizeFirstLetter(customer))
-    .replace(/\bbạn\b/gu, customer);
+    .replace(/\bbạn\b/gu, customer)
+    .replace(/__CUSTOMER_CAP__/g, capitalizeFirstLetter(customer))
+    .replace(/__CUSTOMER__/g, customer);
 }
 
 function applyAddressing(session, text) {
