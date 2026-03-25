@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
 const openaiMaxOutputTokens = 140;
+const AI_HANDOFF_TOKEN = "__HANDOFF__";
 const botEnabledDefault = process.env.BOT_ENABLED !== "false";
 const configuredAdminNotifyPsid = process.env.ADMIN_NOTIFY_PSID || "";
 const adminRegisterCode = process.env.ADMIN_REGISTER_CODE || "";
@@ -227,6 +228,16 @@ const PRODUCT_CATALOG = [
   },
 ];
 
+const PRODUCT_SALES_NOTES = {
+  "Gạo ST25": "Dòng này thơm, hạt đẹp, hợp ăn gia đình ạ.",
+  "Gạo Thơm Dẻo ST21": "Dòng này mềm dẻo, dễ ăn ạ.",
+  "Gạo Thơm Dẻo Sữa ST21": "Dòng này mềm dẻo hơn, hợp nếu anh/chị thích cơm mềm ạ.",
+  "Gạo Nàng Hoa": "Dòng này mềm, dễ ăn ạ.",
+  "Gạo Thơm Lài": "Dòng này thơm nhẹ, dễ ăn ạ.",
+  "Gạo nở xốp": "Dòng này hợp nếu anh/chị thích cơm nở xốp ạ.",
+  "Gạo nở nhiều, khô cơm": "Dòng này hợp nếu anh/chị thích cơm nở nhiều, khô cơm ạ.",
+};
+
 const MAIN_MENU_QUICK_REPLIES = [
   { title: "Gạo ăn gia đình", payload: "MENU_FAMILY_RICE" },
   { title: "Gạo cho quán ăn", payload: "MENU_RESTAURANT_RICE" },
@@ -285,6 +296,7 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu khách hỏi ST25 chung chung: liệt kê đủ 3 dòng ST25 đang có là ST25 thường, ST25 và ST25 Lúa Tôm; nhấn mạnh khuyến mãi mua 10kg tặng 1kg; sau đó hỏi khách muốn chốt giao loại nào.
 - Nếu chỉ cần hỏi lại nhu cầu: chỉ hỏi 1 câu ngắn, không viết thêm phần mở rộng.
 - Nếu khách hỏi 1 loại gạo cụ thể: trả lời thẳng vào loại đó, không lan sang quá nhiều loại khác.
+- Nếu không chắc hoặc câu hỏi nằm ngoài dữ liệu, trả về đúng chuỗi ${AI_HANDOFF_TOKEN}.
 - Không gửi đoạn văn dài khi chỉ cần 1 câu trả lời ngắn.
 - Mỗi tin chỉ 1 ý chính.
 - Chỉ hỏi lại đúng 1 câu.
@@ -359,6 +371,43 @@ function renderInfoPage(title, bodyHtml) {
 
 function formatProductListLine(product) {
   return `- ${product.name}: ${product.price}`;
+}
+
+function parsePriceValue(priceText) {
+  return Number(priceText.replace(/[^\d]/g, ""));
+}
+
+function formatPricePerKg(priceValue) {
+  return `${priceValue.toLocaleString("vi-VN")} đ/kg`;
+}
+
+function extractPricePointVnd(messageText) {
+  const normalizedText = normalizeText(messageText);
+  const shorthandMatch = normalizedText.match(/\b(\d{2,3})\s*(k|ngan|nghin)\b/);
+
+  if (shorthandMatch) {
+    return Number(shorthandMatch[1]) * 1000;
+  }
+
+  const fullMatch = normalizedText.match(/\b(\d{2,3})\s*000\b/);
+
+  if (fullMatch) {
+    return Number(fullMatch[1]) * 1000;
+  }
+
+  return null;
+}
+
+function findProductsByPricePoint(messageText) {
+  const pricePointVnd = extractPricePointVnd(messageText);
+
+  if (!pricePointVnd) {
+    return [];
+  }
+
+  return PRODUCT_CATALOG.filter(
+    (product) => parsePriceValue(product.price) === pricePointVnd,
+  );
 }
 
 function pruneSeenMessageIds() {
@@ -884,6 +933,167 @@ ${closingQuestion}`,
   };
 }
 
+function buildSpecificProductReply(product) {
+  const salesNote = PRODUCT_SALES_NOTES[product.name];
+  const lines = [`Dạ ${product.name} bên em đang ${product.price}.`];
+
+  if (salesNote) {
+    lines.push(salesNote);
+  }
+
+  lines.push("Mua 10kg tặng 1kg.");
+  lines.push("Anh/chị cần khoảng bao nhiêu kg để em lên đơn giao tận nơi ạ?");
+
+  return {
+    text: lines.join("\n\n"),
+    includeMenu: true,
+  };
+}
+
+function buildPricePointReply(messageText) {
+  const normalizedText = normalizeText(messageText);
+  const pricePointVnd = extractPricePointVnd(messageText);
+
+  if (!pricePointVnd) {
+    return null;
+  }
+
+  const hasLookupContext = [
+    "gia",
+    "loai",
+    "gao",
+    "dong",
+    "muc",
+    "co khong",
+    "nao",
+  ].some((keyword) => normalizedText.includes(keyword));
+
+  if (!hasLookupContext || extractQuantityKg(messageText)) {
+    return null;
+  }
+
+  const products = findProductsByPricePoint(messageText);
+  const priceText = formatPricePerKg(pricePointVnd);
+
+  if (products.length === 0) {
+    return {
+      text: `Dạ mức ${priceText} bên em chưa có trong bảng giá hiện tại ạ.
+
+Anh/chị muốn em gợi ý mức gần đó dễ chọn hơn không ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  const lines = products.map((product) => `- ${product.name}`);
+  const closingQuestion =
+    products.some((product) => product.name.includes("nở xốp")) &&
+    products.some((product) => product.name.includes("khô cơm"))
+      ? "Anh/chị thích cơm nở xốp hay khô cơm hơn ạ?"
+      : "Anh/chị đang nghiêng về loại nào để em tư vấn nhanh hơn ạ?";
+
+  return {
+    text: `Dạ mức ${priceText} bên em đang có:
+
+${lines.join("\n")}
+
+${closingQuestion}`,
+    includeMenu: true,
+  };
+}
+
+function buildRecommendationReply(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  if (normalizedText.includes("deo")) {
+    return {
+      text: `Dạ nếu anh/chị thích cơm dẻo, em gợi ý 2 loại dễ chọn:
+
+- ST25: thơm, hạt đẹp
+- ST21: mềm dẻo, dễ ăn
+
+Anh/chị thích dẻo nhiều hay dẻo vừa ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  if (
+    normalizedText.includes("mem") ||
+    normalizedText.includes("de an") ||
+    normalizedText.includes("nguoi lon tuoi") ||
+    normalizedText.includes("tre em")
+  ) {
+    return {
+      text: `Dạ nếu anh/chị thích cơm mềm, em gợi ý 2 loại:
+
+- ST21: mềm dẻo, dễ ăn
+- Nàng Hoa: mềm, dễ ăn
+
+Anh/chị đang nghiêng về ST21 hay Nàng Hoa ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  if (
+    normalizedText.includes("re") ||
+    normalizedText.includes("gia tot") ||
+    normalizedText.includes("gia hop ly") ||
+    normalizedText.includes("tiet kiem")
+  ) {
+    return {
+      text: `Dạ nếu anh/chị ưu tiên giá hợp lý, em gợi ý 2 loại:
+
+- Gạo nở xốp: 16.000 đ/kg
+- Gạo nở nhiều, khô cơm: 16.000 đ/kg
+
+Anh/chị thích cơm nở xốp hay khô cơm hơn ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  if (normalizedText.includes("ngon")) {
+    return {
+      text: `Dạ nếu anh/chị muốn dòng ngon nổi bật, em gợi ý 2 loại:
+
+- ST25: thơm, hạt đẹp
+- ST21: mềm dẻo, dễ ăn
+
+Anh/chị thích thơm rõ hay mềm dẻo hơn ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  if (normalizedText.includes("thom")) {
+    return {
+      text: `Dạ nếu anh/chị thích gạo thơm, em gợi ý 2 loại:
+
+- ST25: thơm rõ
+- Thơm Lài: thơm nhẹ
+
+Anh/chị thích thơm rõ hay thơm nhẹ ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  if (
+    normalizedText.includes("no nhieu") ||
+    normalizedText.includes("xop") ||
+    normalizedText.includes("kho com") ||
+    normalizedText.includes("toi")
+  ) {
+    return {
+      text: `Dạ nếu anh/chị thích cơm nở, em gợi ý 2 loại:
+
+- Gạo nở xốp: 16.000 đ/kg
+- Gạo nở nhiều, khô cơm: 16.000 đ/kg
+
+Anh/chị thích cơm nở xốp hay khô cơm hơn ạ?`,
+      includeMenu: true,
+    };
+  }
+
+  return null;
+}
+
 function extractQuantityKg(messageText) {
   const match = messageText.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i);
 
@@ -1362,9 +1572,33 @@ function isPriceListRequest(messageText) {
 function isOrderIntent(messageText) {
   const normalizedText = normalizeText(messageText);
 
-  return ["dat hang", "mua", "len don", "order", "chot don"].some((keyword) =>
-    normalizedText.includes(keyword),
-  );
+  if (
+    ["dat hang", "len don", "order", "chot don", "mua ngay"].some((keyword) =>
+      normalizedText.includes(keyword),
+    )
+  ) {
+    return true;
+  }
+
+  if (isRepeatPurchaseHint(messageText)) {
+    return false;
+  }
+
+  const hasPurchaseVerb =
+    normalizedText.includes("muon mua") ||
+    normalizedText.includes("can mua") ||
+    normalizedText.includes("muon lay") ||
+    normalizedText.includes("can lay") ||
+    /\bmua\b/.test(normalizedText) ||
+    /\blay\b/.test(normalizedText) ||
+    normalizedText.startsWith("mua ") ||
+    normalizedText.startsWith("lay ");
+  const hasOrderSignal =
+    Boolean(extractQuantityKg(messageText)) ||
+    Boolean(findProductByText(messageText)) ||
+    isGenericSt25Mention(messageText);
+
+  return hasPurchaseVerb && hasOrderSignal;
 }
 
 function isCancelOrderRequest(messageText) {
@@ -1566,6 +1800,10 @@ async function generateReplyText(session, messageText) {
 
   if (!replyText) {
     throw new Error("OpenAI response did not include text output");
+  }
+
+  if (replyText.includes(AI_HANDOFF_TOKEN)) {
+    return AI_HANDOFF_TOKEN;
   }
 
   return replyText;
@@ -1798,6 +2036,13 @@ Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại ch
     return buildDeliveryReply();
   }
 
+  const pricePointReply = buildPricePointReply(messageText);
+
+  if (pricePointReply) {
+    resetOrder(session);
+    return pricePointReply;
+  }
+
   if (isOrderIntent(messageText)) {
     return startOrder(session, messageText);
   }
@@ -1807,6 +2052,13 @@ Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại ch
     return buildSt25Reply();
   }
 
+  const product = findProductByText(messageText);
+
+  if (product) {
+    resetOrder(session);
+    return buildSpecificProductReply(product);
+  }
+
   if (isIndecisiveRequest(messageText)) {
     return {
       text: INDECISIVE_REPLY,
@@ -1814,8 +2066,25 @@ Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại ch
     };
   }
 
+  const recommendationReply = buildRecommendationReply(messageText);
+
+  if (recommendationReply) {
+    resetOrder(session);
+    return recommendationReply;
+  }
+
+  const aiReply = await generateReplyText(session, messageText);
+
+  if (aiReply === AI_HANDOFF_TOKEN) {
+    return {
+      text: "",
+      includeMenu: false,
+      notifyAdminUnhandledReason: "AI handoff",
+    };
+  }
+
   return {
-    text: await generateReplyText(session, messageText),
+    text: aiReply,
     includeMenu: true,
   };
 }
