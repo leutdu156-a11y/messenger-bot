@@ -120,7 +120,7 @@ Cách trả lời:
 - Không liệt kê quá 2 lựa chọn trong một tin, trừ khi khách yêu cầu xem bảng giá
 - Luôn kết thúc bằng 1 câu hỏi dẫn dắt nếu khách chưa chốt`;
 const FALLBACK_REPLY =
-  "Dạ em đã nhận được tin nhắn, bên em sẽ phản hồi sớm ạ.";
+  "Dạ bên em đã nhận tin nhắn ạ. Anh/chị cần em hỗ trợ loại gạo nào để em tư vấn nhanh hơn ạ?";
 const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const seenMessageIds = new Map();
@@ -489,6 +489,14 @@ function getAddressing(session) {
 }
 
 function replaceCustomerTitleVariants(text, customer) {
+  if (customer === "anh/chị") {
+    return text
+      .replace(/\bMình\b/gu, "Anh/chị")
+      .replace(/\bmình\b/gu, "anh/chị")
+      .replace(/\bBạn\b/gu, "Anh/chị")
+      .replace(/\bbạn\b/gu, "anh/chị");
+  }
+
   return text
     .replace(/\bAnh\/chị\b/gu, capitalizeFirstLetter(customer))
     .replace(/\banh\/chị\b/gu, customer)
@@ -1041,6 +1049,18 @@ function isDirectCallRequest(messageText) {
   ].some((keyword) => normalizedText.includes(keyword));
 }
 
+function isDeliveryRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return [
+    "giao hang",
+    "ship",
+    "freeship",
+    "van chuyen",
+    "gui ve",
+  ].some((keyword) => normalizedText.includes(keyword));
+}
+
 function buildFamilyRiceReply() {
   return {
     text: `Dạ với nhu cầu gia đình, em gợi ý 2 loại dễ chọn:
@@ -1058,6 +1078,16 @@ function buildRestaurantRiceReply() {
     text: `Dạ nếu anh/chị mua cho quán ăn, em sẽ ưu tiên dòng cơm ổn định và giá hợp lý ạ.
 
 Anh/chị đang cần cơm nở nhiều hay dẻo vừa ạ?`,
+    includeMenu: true,
+  };
+}
+
+function buildDeliveryReply() {
+  return {
+    text: `Dạ bên em có giao hàng tận nơi ạ.
+
+🚚 Freeship từ 20kg.
+Anh/chị ở khu vực nào để em hỗ trợ nhanh hơn ạ?`,
     includeMenu: true,
   };
 }
@@ -1163,13 +1193,7 @@ async function sendMessengerText(senderId, replyText, options = {}) {
 }
 
 function maybePrefixGreeting(session, responseText) {
-  if (session.greeted) {
-    return responseText;
-  }
-
-  session.greeted = true;
-  return `🌾 Dạ em chào anh/chị ạ.
-${responseText}`;
+  return responseText;
 }
 
 async function buildBotResponse(session, messageText, menuPayload) {
@@ -1234,6 +1258,11 @@ Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại ch
   if (isPriceListRequest(messageText)) {
     resetOrder(session);
     return buildPriceListReply();
+  }
+
+  if (isDeliveryRequest(messageText)) {
+    resetOrder(session);
+    return buildDeliveryReply();
   }
 
   if (isOrderIntent(messageText)) {
