@@ -127,8 +127,6 @@ Cách trả lời:
 - Chỉ hỏi lại đúng 1 câu
 - Không liệt kê quá 2 lựa chọn trong một tin, trừ khi khách yêu cầu xem bảng giá
 - Luôn kết thúc bằng 1 câu hỏi dẫn dắt nếu khách chưa chốt`;
-const FALLBACK_REPLY =
-  "Dạ bên em đã nhận tin nhắn ạ. Anh/chị cần em hỗ trợ loại gạo nào để em tư vấn nhanh hơn ạ?";
 const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const seenMessageIds = new Map();
@@ -662,6 +660,20 @@ function buildAdminOrderMessage(order) {
 - Mã đơn: ${order.orderId}`;
 }
 
+function buildAdminUnhandledMessage({
+  senderId,
+  customerTitle,
+  messageText,
+  reason,
+}) {
+  return `Tin nhắn cần admin xử lý
+
+- Khách: ${customerTitle || "anh/chị"}
+- Sender ID: ${senderId}
+- Nội dung: ${messageText || "(không có text)"}
+- Lý do: ${reason}`;
+}
+
 async function notifyAdminAboutOrder(order) {
   const adminNotifyPsid = getAdminNotifyPsid();
 
@@ -670,6 +682,17 @@ async function notifyAdminAboutOrder(order) {
   }
 
   await sendMessengerText(adminNotifyPsid, buildAdminOrderMessage(order));
+  return true;
+}
+
+async function notifyAdminAboutUnhandledMessage(payload) {
+  const adminNotifyPsid = getAdminNotifyPsid();
+
+  if (!adminNotifyPsid) {
+    return false;
+  }
+
+  await sendMessengerText(adminNotifyPsid, buildAdminUnhandledMessage(payload));
   return true;
 }
 
@@ -1714,14 +1737,29 @@ async function handleMessagingEvent(event) {
   });
 
   let response = {
-    text: FALLBACK_REPLY,
-    includeMenu: true,
+    text: "",
+    includeMenu: false,
   };
 
   try {
     response = await buildBotResponse(session, messageText, menuPayload);
   } catch (error) {
     console.error("OpenAI reply failed:", formatError(error));
+
+    try {
+      const handled = await notifyAdminAboutUnhandledMessage({
+        senderId,
+        customerTitle: session.customerTitle,
+        messageText,
+        reason: error?.message || "OpenAI reply failed",
+      });
+
+      if (handled) {
+        console.log("admin notified for unhandled message:", { senderId });
+      }
+    } catch (notifyError) {
+      console.error("admin notify failed:", formatError(notifyError));
+    }
   }
 
   const finalText =
@@ -1735,14 +1773,18 @@ async function handleMessagingEvent(event) {
   console.log("reply text:", personalizedText);
 
   appendHistory(session, "user", messageText || menuPayload);
-  appendHistory(session, "assistant", personalizedText);
+  if (personalizedText) {
+    appendHistory(session, "assistant", personalizedText);
+  }
 
-  try {
-    await sendMessengerText(senderId, personalizedText, {
-      includeMenu: Boolean(response.includeMenu),
-    });
-  } catch (error) {
-    console.error("Messenger send failed:", formatError(error));
+  if (personalizedText) {
+    try {
+      await sendMessengerText(senderId, personalizedText, {
+        includeMenu: Boolean(response.includeMenu),
+      });
+    } catch (error) {
+      console.error("Messenger send failed:", formatError(error));
+    }
   }
 
   if (response.confirmedOrderData) {
