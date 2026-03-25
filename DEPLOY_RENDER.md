@@ -23,3 +23,5 @@ Notes:
 - Render provides `PORT` dynamically at runtime.
 - The app must bind to `0.0.0.0`.
 - Keep secrets in the Render environment settings, not in code.
+- Muốn admin cố định không mất sau redeploy: đặt `ADMIN_NOTIFY_PSID` trên Render.
+- Muốn lấy PSID của tài khoản đang chat: nhắn `psid của tôi` vào fanpage.

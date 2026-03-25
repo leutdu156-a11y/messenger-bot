@@ -1351,6 +1351,12 @@ function isRepeatPurchaseHint(messageText) {
 function isAdminRegisterRequest(messageText) {
   const normalizedText = normalizeText(messageText);
 
+  return normalizedText.startsWith("dang ky admin");
+}
+
+function isValidAdminRegisterRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
   if (adminRegisterCode) {
     return normalizedText === `dang ky admin ${normalizeText(adminRegisterCode)}`;
   }
@@ -1368,6 +1374,17 @@ function isAdminDisableRequest(messageText) {
   const normalizedText = normalizeText(messageText);
 
   return ["huy admin", "tat admin", "admin off"].includes(normalizedText);
+}
+
+function isMyPsidRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return [
+    "psid cua toi",
+    "psid",
+    "lay psid",
+    "my psid",
+  ].includes(normalizedText);
 }
 
 function isDeliveryRequest(messageText) {
@@ -1523,6 +1540,20 @@ async function buildBotResponse(session, messageText, menuPayload) {
   }
 
   if (isAdminRegisterRequest(messageText)) {
+    if (configuredAdminNotifyPsid) {
+      return {
+        text: "Dạ hiện đang dùng admin cố định trên hệ thống rồi ạ.",
+      };
+    }
+
+    if (!isValidAdminRegisterRequest(messageText)) {
+      return {
+        text: adminRegisterCode
+          ? "Dạ mã đăng ký admin chưa đúng ạ."
+          : "Dạ cú pháp đúng là: đăng ký admin",
+      };
+    }
+
     runtimeAdminNotifyPsid = session.senderId;
 
     return {
@@ -1530,17 +1561,31 @@ async function buildBotResponse(session, messageText, menuPayload) {
     };
   }
 
+  if (isMyPsidRequest(messageText)) {
+    return {
+      text: `PSID của tài khoản này là: ${session.senderId}`,
+    };
+  }
+
   if (isAdminStatusRequest(messageText)) {
     const currentAdminPsid = getAdminNotifyPsid();
 
     return {
-      text: currentAdminPsid
-        ? "Dạ hiện đang bật nhận báo đơn cho một tài khoản admin rồi ạ."
-        : "Dạ hiện chưa có tài khoản admin nhận báo đơn ạ.",
+      text: configuredAdminNotifyPsid
+        ? "Dạ hiện đang dùng admin cố định trên Render ạ."
+        : currentAdminPsid
+          ? "Dạ hiện đang bật nhận báo đơn cho một tài khoản admin rồi ạ."
+          : "Dạ hiện chưa có tài khoản admin nhận báo đơn ạ.",
     };
   }
 
   if (isAdminDisableRequest(messageText)) {
+    if (configuredAdminNotifyPsid) {
+      return {
+        text: "Dạ admin hiện đang được cấu hình cố định trên Render nên không tắt bằng chat được ạ.",
+      };
+    }
+
     if (getAdminNotifyPsid() && getAdminNotifyPsid() === session.senderId) {
       runtimeAdminNotifyPsid = "";
       return {
