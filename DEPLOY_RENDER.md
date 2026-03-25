@@ -10,6 +10,14 @@ Required environment variables:
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 
+Optional order integrations:
+- `ADMIN_NOTIFY_PSID`: PSID admin để page gửi tin nhắn báo có đơn mới
+- `GOOGLE_SHEETS_SPREADSHEET_ID`: ID file Google Sheet nhận đơn
+- `GOOGLE_SHEETS_RANGE`: ví dụ `Orders!A:K`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`: JSON service account của Google Sheets API
+- `STORE_ORDER_WEBHOOK_URL`: endpoint nhận đơn từ bot để đẩy vào hệ thống quản lý cửa hàng
+- `STORE_ORDER_WEBHOOK_SECRET`: secret gửi kèm header `x-store-order-secret`
+
 Notes:
 - Render provides `PORT` dynamically at runtime.
 - The app must bind to `0.0.0.0`.

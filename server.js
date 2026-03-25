@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
+import { google } from "googleapis";
 import OpenAI from "openai";
 
 dotenv.config();
@@ -8,6 +9,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
 const openaiMaxOutputTokens = 140;
+const adminNotifyPsid = process.env.ADMIN_NOTIFY_PSID || "";
+const googleSheetsSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "";
+const googleSheetsRange = process.env.GOOGLE_SHEETS_RANGE || "Orders!A:K";
+const googleServiceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "";
+const storeOrderWebhookUrl = process.env.STORE_ORDER_WEBHOOK_URL || "";
+const storeOrderWebhookSecret = process.env.STORE_ORDER_WEBHOOK_SECRET || "";
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -125,6 +132,7 @@ const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const seenMessageIds = new Map();
 const customerSessions = new Map();
+let googleSheetsClientPromise = null;
 
 const PRODUCT_CATALOG = [
   { name: "Tấm Thơm", price: "14.000 đ/kg", aliases: ["tam thom"] },
@@ -584,6 +592,157 @@ function formatError(error) {
   };
 }
 
+function parseGoogleServiceAccountCredentials() {
+  if (!googleServiceAccountJson) {
+    return null;
+  }
+
+  const credentials = JSON.parse(googleServiceAccountJson);
+
+  if (credentials.private_key) {
+    credentials.private_key = credentials.private_key.replace(/\\n/g, "\n");
+  }
+
+  return credentials;
+}
+
+async function getGoogleSheetsClient() {
+  if (!googleSheetsSpreadsheetId || !googleServiceAccountJson) {
+    return null;
+  }
+
+  if (!googleSheetsClientPromise) {
+    googleSheetsClientPromise = (async () => {
+      const credentials = parseGoogleServiceAccountCredentials();
+      const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      });
+      const authClient = await auth.getClient();
+
+      return google.sheets({
+        version: "v4",
+        auth: authClient,
+      });
+    })();
+  }
+
+  return googleSheetsClientPromise;
+}
+
+function buildConfirmedOrderRecord(senderId, session, orderData) {
+  const timestamp = new Date().toISOString();
+
+  return {
+    orderId: `MB-${Date.now()}-${senderId.slice(-6)}`,
+    confirmedAt: timestamp,
+    source: "messenger",
+    senderId,
+    customerTitle: session.customerTitle || "anh/chị",
+    ...orderData,
+  };
+}
+
+function buildAdminOrderMessage(order) {
+  return `Đơn Messenger mới
+
+- Loại gạo: ${order.productName}
+- Số lượng: ${order.quantityKg} kg
+- Người nhận: ${order.recipientName}
+- SĐT: ${order.phone}
+- Địa chỉ: ${order.address}
+- Mã đơn: ${order.orderId}`;
+}
+
+async function notifyAdminAboutOrder(order) {
+  if (!adminNotifyPsid) {
+    return false;
+  }
+
+  await sendMessengerText(adminNotifyPsid, buildAdminOrderMessage(order));
+  return true;
+}
+
+async function appendOrderToGoogleSheets(order) {
+  const sheets = await getGoogleSheetsClient();
+
+  if (!sheets) {
+    return false;
+  }
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: googleSheetsSpreadsheetId,
+    range: googleSheetsRange,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [[
+        order.confirmedAt,
+        order.orderId,
+        order.productName,
+        order.quantityKg,
+        order.recipientName,
+        order.phone,
+        order.address,
+        order.senderId,
+        order.customerTitle,
+        order.source,
+        "confirmed",
+      ]],
+    },
+  });
+
+  return true;
+}
+
+async function pushOrderToStoreManagement(order) {
+  if (!storeOrderWebhookUrl) {
+    return false;
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (storeOrderWebhookSecret) {
+    headers["x-store-order-secret"] = storeOrderWebhookSecret;
+  }
+
+  const response = await fetch(storeOrderWebhookUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ order }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Store order webhook failed with ${response.status}: ${errorText}`,
+    );
+  }
+
+  return true;
+}
+
+async function dispatchConfirmedOrder(order) {
+  const jobs = [
+    ["admin message", () => notifyAdminAboutOrder(order)],
+    ["google sheets", () => appendOrderToGoogleSheets(order)],
+    ["store webhook", () => pushOrderToStoreManagement(order)],
+  ];
+
+  for (const [jobName, job] of jobs) {
+    try {
+      const handled = await job();
+
+      if (handled) {
+        console.log(`${jobName} saved:`, order.orderId);
+      }
+    } catch (error) {
+      console.error(`${jobName} failed:`, formatError(error));
+    }
+  }
+}
+
 function buildConversationInput(session, messageText) {
   const recentHistory = session.history
     .slice(-6)
@@ -1018,15 +1177,17 @@ function handleOrderStep(session, messageText) {
     ) {
       console.log("order lead captured:", session.order.data);
       syncCustomerProfileFromOrder(session);
+      const confirmedOrderData = { ...session.order.data };
       const confirmationText = `Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
 
-Bên em sẽ liên hệ xác nhận sớm qua số ${session.order.data.phone}.
+Bên em sẽ liên hệ xác nhận sớm qua số ${confirmedOrderData.phone}.
 Anh/chị để ý điện thoại giúp em nhé.`;
       resetOrder(session);
 
       return {
         text: confirmationText,
         includeMenu: true,
+        confirmedOrderData,
       };
     }
 
@@ -1474,6 +1635,16 @@ async function handleMessagingEvent(event) {
     });
   } catch (error) {
     console.error("Messenger send failed:", formatError(error));
+  }
+
+  if (response.confirmedOrderData) {
+    const confirmedOrder = buildConfirmedOrderRecord(
+      senderId,
+      session,
+      response.confirmedOrderData,
+    );
+
+    void dispatchConfirmedOrder(confirmedOrder);
   }
 }
 
