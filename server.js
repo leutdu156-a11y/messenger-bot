@@ -419,40 +419,59 @@ function normalizeText(value) {
     .trim();
 }
 
+function normalizeTitleText(value) {
+  return value
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function detectCustomerTitle(messageText) {
+  const titledText = normalizeTitleText(messageText);
   const normalizedText = normalizeText(messageText);
 
   if (
-    /(^|\s)co\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
-    /(^|\s)toi la co(\s|$)/.test(normalizedText)
+    /(^|\s)cô\s+(cần|muốn|hỏi|lấy|mua|đặt|thích|ở|đang)(\s|$)/u.test(titledText) ||
+    /(^|\s)tôi là cô(\s|$)/u.test(titledText) ||
+    /(^|\s)gọi cô(\s|$)/u.test(titledText)
   ) {
     return "cô";
   }
 
   if (
-    /(^|\s)chu\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
-    /(^|\s)toi la chu(\s|$)/.test(normalizedText)
+    /(^|\s)chú\s+(cần|muốn|hỏi|lấy|mua|đặt|thích|ở|đang)(\s|$)/u.test(titledText) ||
+    /(^|\s)tôi là chú(\s|$)/u.test(titledText) ||
+    /(^|\s)gọi chú(\s|$)/u.test(titledText) ||
+    /(^|\s)chu\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText)
   ) {
     return "chú";
   }
 
   if (
-    /(^|\s)bac\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
-    /(^|\s)toi la bac(\s|$)/.test(normalizedText)
+    /(^|\s)bác\s+(cần|muốn|hỏi|lấy|mua|đặt|thích|ở|đang)(\s|$)/u.test(titledText) ||
+    /(^|\s)tôi là bác(\s|$)/u.test(titledText) ||
+    /(^|\s)gọi bác(\s|$)/u.test(titledText) ||
+    /(^|\s)bac\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText)
   ) {
     return "bác";
   }
 
   if (
-    /(^|\s)chi\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
-    /(^|\s)toi la chi(\s|$)/.test(normalizedText)
+    /(^|\s)chị\s+(cần|muốn|hỏi|lấy|mua|đặt|thích|ở|đang)(\s|$)/u.test(titledText) ||
+    /(^|\s)tôi là chị(\s|$)/u.test(titledText) ||
+    /(^|\s)gọi chị(\s|$)/u.test(titledText) ||
+    /(^|\s)chi\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText)
   ) {
     return "chị";
   }
 
   if (
-    /(^|\s)anh\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
-    /(^|\s)toi la anh(\s|$)/.test(normalizedText)
+    /(^|\s)anh\s+(cần|muốn|hỏi|lấy|mua|đặt|thích|ở|đang)(\s|$)/u.test(titledText) ||
+    /(^|\s)tôi là anh(\s|$)/u.test(titledText) ||
+    /(^|\s)gọi anh(\s|$)/u.test(titledText) ||
+    /(^|\s)anh\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText)
   ) {
     return "anh";
   }
@@ -890,6 +909,12 @@ function startOrder(session, messageText = "") {
 
 function setOrderFieldValue(session, field, messageText) {
   if (field === "productName") {
+    if (isRepeatPurchaseHint(messageText)) {
+      return {
+        text: "Dạ anh/chị muốn lấy lại loại cũ hay đổi sang loại khác ạ?",
+      };
+    }
+
     if (isGenericSt25Mention(messageText)) {
       return buildSt25Reply(true);
     }
@@ -1136,6 +1161,19 @@ function isDirectCallRequest(messageText) {
     "hotline",
     "zalo",
     "lien he truc tiep",
+  ].some((keyword) => normalizedText.includes(keyword));
+}
+
+function isRepeatPurchaseHint(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return [
+    "mua roi",
+    "lay roi",
+    "khach cu",
+    "dat roi",
+    "mua ben em roi",
+    "mua roi ma",
   ].some((keyword) => normalizedText.includes(keyword));
 }
 
