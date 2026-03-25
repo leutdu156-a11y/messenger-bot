@@ -210,14 +210,15 @@ const ORDER_FIELD_SEQUENCE = [
   "phone",
   "address",
 ];
+const ELDER_TITLES = new Set(["cô", "chú", "bác"]);
 
 const COMPLAINT_REPLY =
   `Dạ em rất xin lỗi anh/chị về trải nghiệm chưa tốt ạ.
 
 Anh/chị gửi giúp em:
-- 📞 Số điện thoại
-- 🧾 Mã đơn hoặc thời gian nhận hàng
-- ⚠️ Vấn đề mình đang gặp
+- Số điện thoại
+- Mã đơn hoặc thời gian nhận hàng
+- Vấn đề mình đang gặp
 
 Em xin chuyển ngay bộ phận hỗ trợ liên hệ anh/chị sớm ạ.`;
 const WELCOME_TEXT =
@@ -227,15 +228,15 @@ Anh/chị đang cần dòng cơm dẻo ngon cho gia đình hay loại giá tốt
 const ORDER_NOW_TEXT = `Dạ em lên đơn cho anh/chị ngay ạ.
 
 Anh/chị gửi giúp em:
-- 🌾 Loại gạo
-- ⚖️ Số kg
-- 👤 Tên người nhận
-- 📞 Số điện thoại
-- 📍 Địa chỉ giao hàng`;
+- Loại gạo
+- Số kg
+- Tên người nhận
+- Số điện thoại
+- Địa chỉ giao hàng`;
 const INDECISIVE_REPLY = `Dạ để em gợi ý nhanh cho anh/chị nhé:
 
-- 🌾 ST25: thơm, hạt đẹp
-- 🌾 ST21: mềm dẻo, dễ ăn
+- ST25: thơm, hạt đẹp
+- ST21: mềm dẻo, dễ ăn
 
 Anh/chị đang nghiêng về loại ngon nổi bật hay loại tiết kiệm hơn ạ?`;
 const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiên:
@@ -326,7 +327,7 @@ function renderInfoPage(title, bodyHtml) {
 }
 
 function formatProductListLine(product) {
-  return `🌾 ${product.name}  •  💰 ${product.price}`;
+  return `- ${product.name}: ${product.price}`;
 }
 
 function pruneSeenMessageIds() {
@@ -411,25 +412,60 @@ function normalizeText(value) {
 function detectCustomerTitle(messageText) {
   const normalizedText = normalizeText(messageText);
 
-  if (/(^|\s)co(\s|$)/.test(normalizedText)) {
+  if (
+    /(^|\s)co\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
+    /(^|\s)toi la co(\s|$)/.test(normalizedText)
+  ) {
     return "cô";
   }
 
-  if (/(^|\s)chu(\s|$)/.test(normalizedText)) {
+  if (
+    /(^|\s)chu\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
+    /(^|\s)toi la chu(\s|$)/.test(normalizedText)
+  ) {
     return "chú";
   }
 
-  if (/(^|\s)bac(\s|$)/.test(normalizedText)) {
+  if (
+    /(^|\s)bac\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
+    /(^|\s)toi la bac(\s|$)/.test(normalizedText)
+  ) {
     return "bác";
+  }
+
+  if (
+    /(^|\s)chi\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
+    /(^|\s)toi la chi(\s|$)/.test(normalizedText)
+  ) {
+    return "chị";
+  }
+
+  if (
+    /(^|\s)anh\s+(can|muon|hoi|lay|mua|dat|thich|o|dang)(\s|$)/.test(normalizedText) ||
+    /(^|\s)toi la anh(\s|$)/.test(normalizedText)
+  ) {
+    return "anh";
   }
 
   return null;
 }
 
+function shouldUpdateCustomerTitle(currentTitle, nextTitle) {
+  if (!nextTitle || currentTitle === nextTitle) {
+    return false;
+  }
+
+  if (!currentTitle || currentTitle === "anh/chị") {
+    return true;
+  }
+
+  return false;
+}
+
 function updateCustomerTitle(session, messageText) {
   const detectedTitle = detectCustomerTitle(messageText);
 
-  if (detectedTitle) {
+  if (shouldUpdateCustomerTitle(session.customerTitle, detectedTitle)) {
     session.customerTitle = detectedTitle;
   }
 }
@@ -444,7 +480,7 @@ function capitalizeFirstLetter(value) {
 
 function getAddressing(session) {
   const customer = session.customerTitle || "anh/chị";
-  const self = customer === "anh/chị" ? "em" : "con";
+  const self = ELDER_TITLES.has(customer) ? "con" : "em";
 
   return {
     self,
@@ -452,26 +488,34 @@ function getAddressing(session) {
   };
 }
 
+function replaceCustomerTitleVariants(text, customer) {
+  return text
+    .replace(/\bAnh\/chị\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\banh\/chị\b/gu, customer)
+    .replace(/\bAnh\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\banh\b/gu, customer)
+    .replace(/\bChị\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bchị\b/gu, customer)
+    .replace(/\bCô\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bcô\b/gu, customer)
+    .replace(/\bChú\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bchú\b/gu, customer)
+    .replace(/\bBác\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bbác\b/gu, customer)
+    .replace(/\bMình\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bmình\b/gu, customer)
+    .replace(/\bBạn\b/gu, capitalizeFirstLetter(customer))
+    .replace(/\bbạn\b/gu, customer);
+}
+
 function applyAddressing(session, text) {
   const { self, customer } = getAddressing(session);
 
-  return text
-    .split("Anh/chị")
-    .join(capitalizeFirstLetter(customer))
-    .split("anh/chị")
-    .join(customer)
-    .split("Mình")
-    .join(capitalizeFirstLetter(customer))
-    .split("mình")
-    .join(customer)
-    .split("Bạn")
-    .join(capitalizeFirstLetter(customer))
-    .split("bạn")
-    .join(customer)
-    .replace(/\bem\b/gu, self)
+  return replaceCustomerTitleVariants(text, customer)
     .replace(/\bEm\b/gu, capitalizeFirstLetter(self))
-    .replace(/\banh\/chi\b/gu, customer)
-    .replace(/\bAnh\/chi\b/gu, capitalizeFirstLetter(customer));
+    .replace(/\bem\b/gu, self)
+    .replace(/\bCon\b/gu, capitalizeFirstLetter(self))
+    .replace(/\bcon\b/gu, self);
 }
 
 function appendHistory(session, role, text) {
@@ -550,7 +594,7 @@ function buildSt25Reply(forOrdering = false) {
     product.name.startsWith("Gạo ST25"),
   );
   const lines = st25Products.map(
-    (product) => `- 🌾 ${product.name}: ${product.price}`,
+    (product) => `- ${product.name}: ${product.price}`,
   );
   const closingQuestion = forOrdering
     ? "Anh/chị muốn em lên đơn loại ST25 nào ạ?"
@@ -585,22 +629,22 @@ function getNextOrderField(orderData) {
 
 function getOrderFieldPrompt(field) {
   if (field === "productName") {
-    return "🌾 Dạ anh/chị muốn lấy loại gạo nào ạ?";
+    return "Dạ anh/chị muốn lấy loại gạo nào ạ?";
   }
 
   if (field === "quantityKg") {
-    return "⚖️ Dạ anh/chị cần khoảng bao nhiêu kg ạ?";
+    return "Dạ anh/chị cần khoảng bao nhiêu kg ạ?";
   }
 
   if (field === "recipientName") {
-    return "👤 Dạ anh/chị cho em xin tên người nhận giúp em nhé.";
+    return "Dạ anh/chị cho em xin tên người nhận giúp em nhé.";
   }
 
   if (field === "phone") {
-    return "📞 Dạ anh/chị cho em xin số điện thoại nhận hàng ạ.";
+    return "Dạ anh/chị cho em xin số điện thoại nhận hàng ạ.";
   }
 
-  return "📍 Dạ anh/chị gửi giúp em địa chỉ giao hàng đầy đủ nhé.";
+  return "Dạ anh/chị gửi giúp em địa chỉ giao hàng đầy đủ nhé.";
 }
 
 function detectOrderFieldFromText(messageText) {
@@ -704,11 +748,11 @@ function buildNextOrderReply(session) {
 
     const summary = `Dạ em xin phép chốt lại đơn của anh/chị:
 
-🌾 Loại gạo: ${session.order.data.productName}
-⚖️ Số lượng: ${session.order.data.quantityKg} kg
-👤 Người nhận: ${session.order.data.recipientName}
-📞 SĐT: ${session.order.data.phone}
-📍 Địa chỉ: ${session.order.data.address}
+- Loại gạo: ${session.order.data.productName}
+- Số lượng: ${session.order.data.quantityKg} kg
+- Người nhận: ${session.order.data.recipientName}
+- SĐT: ${session.order.data.phone}
+- Địa chỉ: ${session.order.data.address}
 
 Anh/chị xác nhận giúp em để bên em lên đơn ạ.`;
 
@@ -760,7 +804,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (!product) {
       return {
-        text: "🌾 Dạ em chưa nhận ra loại gạo ạ. Anh/chị nhắn lại giúp em tên như ST25, ST21, Thơm Lài hoặc Tấm Thơm nhé?",
+        text: "Dạ em chưa nhận ra loại gạo ạ. Anh/chị nhắn lại giúp em tên như ST25, ST21, Thơm Lài hoặc Tấm Thơm nhé?",
       };
     }
 
@@ -773,7 +817,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (!quantityKg) {
       return {
-        text: "⚖️ Dạ anh/chị ghi rõ giúp em số kg, ví dụ 10kg hoặc 25kg nhé?",
+        text: "Dạ anh/chị ghi rõ giúp em số kg, ví dụ 10kg hoặc 25kg nhé?",
       };
     }
 
@@ -791,7 +835,7 @@ function setOrderFieldValue(session, field, messageText) {
 
     if (phone.length < 9 || phone.length > 11) {
       return {
-        text: "📞 Dạ số điện thoại này chưa đúng định dạng ạ. Anh/chị gửi lại giúp em số nhận hàng nhé?",
+        text: "Dạ số điện thoại này chưa đúng định dạng ạ. Anh/chị gửi lại giúp em số nhận hàng nhé?",
       };
     }
 
@@ -801,7 +845,7 @@ function setOrderFieldValue(session, field, messageText) {
 
   if (messageText.trim().length < 5) {
     return {
-      text: "📍 Dạ anh/chị gửi giúp em địa chỉ giao hàng rõ hơn một chút để bên em lên đơn nhé.",
+      text: "Dạ anh/chị gửi giúp em địa chỉ giao hàng rõ hơn một chút để bên em lên đơn nhé.",
     };
   }
 
@@ -852,7 +896,7 @@ function handleOrderStep(session, messageText) {
       )
     ) {
       console.log("order lead captured:", session.order.data);
-      const confirmationText = `✅ Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
+      const confirmationText = `Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
 
 Bên em sẽ liên hệ xác nhận sớm qua số ${session.order.data.phone}.
 Anh/chị để ý điện thoại giúp em nhé.`;
@@ -872,12 +916,12 @@ Anh/chị để ý điện thoại giúp em nhé.`;
       session.order.awaitingConfirmation = false;
       session.order.editingField = "select";
       return {
-        text: "✏️ Dạ anh/chị muốn chỉnh mục nào ạ: loại gạo, số kg, tên người nhận, số điện thoại hay địa chỉ?",
+        text: "Dạ anh/chị muốn chỉnh mục nào ạ: loại gạo, số kg, tên người nhận, số điện thoại hay địa chỉ?",
       };
     }
 
     return {
-      text: "✅ Dạ anh/chị xác nhận giúp em để bên em lên đơn ạ. Nếu cần sửa, anh/chị nhắn tên mục cần chỉnh giúp em nhé.",
+      text: "Dạ anh/chị xác nhận giúp em để bên em lên đơn ạ. Nếu cần sửa, anh/chị nhắn tên mục cần chỉnh giúp em nhé.",
     };
   }
 
@@ -1001,8 +1045,8 @@ function buildFamilyRiceReply() {
   return {
     text: `Dạ với nhu cầu gia đình, em gợi ý 2 loại dễ chọn:
 
-- 🌾 ST25: thơm, hạt đẹp
-- 🌾 ST21: mềm dẻo, dễ ăn
+- ST25: thơm, hạt đẹp
+- ST21: mềm dẻo, dễ ăn
 
 Anh/chị thích cơm dẻo nhiều hay dẻo vừa ạ?`,
     includeMenu: true,
@@ -1137,7 +1181,7 @@ async function buildBotResponse(session, messageText, menuPayload) {
     if (isCancelOrderRequest(messageText)) {
       resetOrder(session);
       return {
-        text: "✅ Dạ em đã dừng tạo đơn rồi ạ. Anh/chị muốn em tư vấn lại loại gạo nào tiếp ạ?",
+        text: "Dạ em đã dừng tạo đơn rồi ạ. Anh/chị muốn em tư vấn lại loại gạo nào tiếp ạ?",
         includeMenu: true,
       };
     }
