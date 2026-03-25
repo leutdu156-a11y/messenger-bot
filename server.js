@@ -59,10 +59,16 @@ Nguyên tắc tư vấn:
 
 5. Nếu khách phân vân, hãy so sánh ngắn gọn, thiên về giúp khách quyết định.
 
-6. Nếu khách hỏi ngoài dữ liệu có sẵn, hãy trả lời:
+6. Mặc định hướng chốt đơn theo giao hàng:
+- xin thông tin nhận hàng để giao tận nơi
+- ưu tiên hỏi số kg, số điện thoại và địa chỉ giao hàng
+- không chủ động bảo khách ra cửa hàng
+- chỉ nhắc địa chỉ cửa hàng nếu khách hỏi trực tiếp
+
+7. Nếu khách hỏi ngoài dữ liệu có sẵn, hãy trả lời:
 "Dạ phần này em xin phép báo lại anh/chị, bên em sẽ kiểm tra và phản hồi sớm ạ."
 
-7. Nếu khách khiếu nại, hãy ưu tiên xin lỗi và chuyển người thật:
+8. Nếu khách khiếu nại, hãy ưu tiên xin lỗi và chuyển người thật:
 "Dạ em rất xin lỗi anh/chị. Em xin ghi nhận thông tin và chuyển ngay bộ phận hỗ trợ để liên hệ anh/chị ạ."
 
 Không được:
@@ -244,6 +250,7 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu khách hỏi xuất hóa đơn hoặc nội dung chưa có dữ liệu: trả lời "Dạ phần này em xin phép báo lại anh/chị, bên em sẽ kiểm tra và phản hồi sớm ạ."
 - Nếu khách hỏi gọi trực tiếp: mời liên hệ hotline/Zalo 0762234135.
 - Nếu khách chưa biết chọn loại nào: dùng flow gợi ý ngắn gọn giữa ST25, ST21 và Thơm Lài.
+- Nếu khách hỏi ST25 chung chung: liệt kê đủ 3 dòng ST25 đang có là ST25 thường, ST25 và ST25 Lúa Tôm; nhấn mạnh khuyến mãi mua 10kg tặng 1kg; sau đó hỏi khách muốn chốt giao loại nào.
 - Nếu chỉ cần hỏi lại nhu cầu: chỉ hỏi 1 câu ngắn, không viết thêm phần mở rộng.
 - Nếu khách hỏi 1 loại gạo cụ thể: trả lời thẳng vào loại đó, không lan sang quá nhiều loại khác.
 - Không gửi đoạn văn dài khi chỉ cần 1 câu trả lời ngắn.
@@ -251,6 +258,7 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Chỉ hỏi lại đúng 1 câu.
 - Không đưa quá 2 lựa chọn trong một tin, trừ khi khách yêu cầu xem bảng giá.
 - Khi có tên gạo, giá, số điện thoại hoặc địa chỉ quan trọng: ưu tiên đặt trên dòng riêng với icon như 🌾 💰 📞 📍 để khách dễ đọc.
+- Hướng chốt đơn là giao hàng tận nơi, không chủ động kêu khách ra cửa hàng.
 - Không được nói 504, tồn kho, quy cách bao, thời gian giao cụ thể hoặc cam kết giao nhanh nếu dữ liệu hiện tại chưa xác nhận.`;
 const STORE_NAME = "Vựa Gạo Sóc Trăng";
 const STORE_HOTLINE = "0762234135";
@@ -527,6 +535,40 @@ function findProductByText(messageText) {
   return matches[0]?.product || null;
 }
 
+function isGenericSt25Mention(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return (
+    normalizedText.includes("st25") &&
+    !normalizedText.includes("st25 thuong") &&
+    !normalizedText.includes("lua tom")
+  );
+}
+
+function buildSt25Reply(forOrdering = false) {
+  const st25Products = PRODUCT_CATALOG.filter((product) =>
+    product.name.startsWith("Gạo ST25"),
+  );
+  const lines = st25Products.map(
+    (product) => `- 🌾 ${product.name}: ${product.price}`,
+  );
+  const closingQuestion = forOrdering
+    ? "Anh/chị muốn em lên đơn loại ST25 nào ạ?"
+    : "Anh/chị muốn em chốt giao loại ST25 nào ạ?";
+
+  return {
+    text: `Dạ bên em đang có 3 dòng ST25:
+
+${lines.join("\n")}
+
+🎁 Khuyến mãi: mua 10kg tặng 1kg
+🚚 Bên em giao tận nơi, freeship từ 20kg
+
+${closingQuestion}`,
+    includeMenu: true,
+  };
+}
+
 function extractQuantityKg(messageText) {
   const match = messageText.match(/(\d+(?:[.,]\d+)?)\s*kg\b/i);
 
@@ -602,7 +644,9 @@ function detectOrderFieldFromText(messageText) {
 }
 
 function hydrateOrderFromMessage(orderData, messageText) {
-  const product = findProductByText(messageText);
+  const product = isGenericSt25Mention(messageText)
+    ? null
+    : findProductByText(messageText);
   const quantityKg = extractQuantityKg(messageText);
   const phoneMatch = messageText.match(/\b0\d{8,10}\b/);
 
@@ -688,6 +732,10 @@ function startOrder(session, messageText = "") {
   resetOrder(session);
   session.order.active = true;
 
+  if (isGenericSt25Mention(messageText)) {
+    return buildSt25Reply(true);
+  }
+
   const detectedProduct = findProductByText(messageText);
   const detectedQuantity = extractQuantityKg(messageText);
 
@@ -704,6 +752,10 @@ function startOrder(session, messageText = "") {
 
 function setOrderFieldValue(session, field, messageText) {
   if (field === "productName") {
+    if (isGenericSt25Mention(messageText)) {
+      return buildSt25Reply(true);
+    }
+
     const product = findProductByText(messageText);
 
     if (!product) {
@@ -1142,6 +1194,11 @@ Nếu tiện, anh/chị để lại số điện thoại, bên em gọi lại ch
 
   if (isOrderIntent(messageText)) {
     return startOrder(session, messageText);
+  }
+
+  if (isGenericSt25Mention(messageText)) {
+    resetOrder(session);
+    return buildSt25Reply();
   }
 
   if (isIndecisiveRequest(messageText)) {
