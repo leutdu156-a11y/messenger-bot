@@ -9,7 +9,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
 const openaiMaxOutputTokens = 140;
-const adminNotifyPsid = process.env.ADMIN_NOTIFY_PSID || "";
+const configuredAdminNotifyPsid = process.env.ADMIN_NOTIFY_PSID || "";
+const adminRegisterCode = process.env.ADMIN_REGISTER_CODE || "";
 const googleSheetsSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "";
 const googleSheetsRange = process.env.GOOGLE_SHEETS_RANGE || "Orders!A:K";
 const googleServiceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "";
@@ -133,6 +134,7 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const seenMessageIds = new Map();
 const customerSessions = new Map();
 let googleSheetsClientPromise = null;
+let runtimeAdminNotifyPsid = configuredAdminNotifyPsid;
 
 const PRODUCT_CATALOG = [
   { name: "Tấm Thơm", price: "14.000 đ/kg", aliases: ["tam thom"] },
@@ -402,6 +404,7 @@ function getSession(senderId) {
 
   if (!customerSessions.has(senderId)) {
     customerSessions.set(senderId, {
+      senderId,
       greeted: false,
       customerTitle: "anh/chị",
       history: [],
@@ -412,6 +415,7 @@ function getSession(senderId) {
   }
 
   const session = customerSessions.get(senderId);
+  session.senderId = senderId;
   session.updatedAt = Date.now();
   return session;
 }
@@ -592,6 +596,10 @@ function formatError(error) {
   };
 }
 
+function getAdminNotifyPsid() {
+  return runtimeAdminNotifyPsid || configuredAdminNotifyPsid;
+}
+
 function parseGoogleServiceAccountCredentials() {
   if (!googleServiceAccountJson) {
     return null;
@@ -655,6 +663,8 @@ function buildAdminOrderMessage(order) {
 }
 
 async function notifyAdminAboutOrder(order) {
+  const adminNotifyPsid = getAdminNotifyPsid();
+
   if (!adminNotifyPsid) {
     return false;
   }
@@ -1338,6 +1348,28 @@ function isRepeatPurchaseHint(messageText) {
   ].some((keyword) => normalizedText.includes(keyword));
 }
 
+function isAdminRegisterRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  if (adminRegisterCode) {
+    return normalizedText === `dang ky admin ${normalizeText(adminRegisterCode)}`;
+  }
+
+  return normalizedText === "dang ky admin";
+}
+
+function isAdminStatusRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return ["trang thai admin", "admin status"].includes(normalizedText);
+}
+
+function isAdminDisableRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return ["huy admin", "tat admin", "admin off"].includes(normalizedText);
+}
+
 function isDeliveryRequest(messageText) {
   const normalizedText = normalizeText(messageText);
 
@@ -1488,6 +1520,37 @@ function maybePrefixGreeting(session, responseText) {
 async function buildBotResponse(session, messageText, menuPayload) {
   if (menuPayload) {
     return handleMenuPayload(session, menuPayload);
+  }
+
+  if (isAdminRegisterRequest(messageText)) {
+    runtimeAdminNotifyPsid = session.senderId;
+
+    return {
+      text: "Dạ em đã bật nhận báo đơn về tài khoản này rồi ạ.",
+    };
+  }
+
+  if (isAdminStatusRequest(messageText)) {
+    const currentAdminPsid = getAdminNotifyPsid();
+
+    return {
+      text: currentAdminPsid
+        ? "Dạ hiện đang bật nhận báo đơn cho một tài khoản admin rồi ạ."
+        : "Dạ hiện chưa có tài khoản admin nhận báo đơn ạ.",
+    };
+  }
+
+  if (isAdminDisableRequest(messageText)) {
+    if (getAdminNotifyPsid() && getAdminNotifyPsid() === session.senderId) {
+      runtimeAdminNotifyPsid = "";
+      return {
+        text: "Dạ em đã tắt nhận báo đơn cho tài khoản này ạ.",
+      };
+    }
+
+    return {
+      text: "Dạ tài khoản này chưa phải tài khoản admin đang nhận báo đơn ạ.",
+    };
   }
 
   if (session.order.active) {

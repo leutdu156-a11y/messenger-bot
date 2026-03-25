@@ -12,6 +12,7 @@ Required environment variables:
 
 Optional order integrations:
 - `ADMIN_NOTIFY_PSID`: PSID admin để page gửi tin nhắn báo có đơn mới
+- `ADMIN_REGISTER_CODE`: mã bí mật cho lệnh chat `đăng ký admin <mã>`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`: ID file Google Sheet nhận đơn
 - `GOOGLE_SHEETS_RANGE`: ví dụ `Orders!A:K`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: JSON service account của Google Sheets API
