@@ -7,6 +7,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
+const openaiMaxOutputTokens = 140;
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -102,8 +103,12 @@ Danh sách sản phẩm:
 
 Cách trả lời:
 - Ưu tiên câu ngắn
-- Mỗi tin nhắn không quá dài
+- Mặc định chỉ trả lời 1-2 câu ngắn hoặc 2-4 dòng ngắn
+- Chỉ dài hơn khi khách yêu cầu bảng giá, so sánh hoặc đang ở bước chốt đơn
 - Có thể xuống dòng cho dễ đọc
+- Không nhắc lại thông tin khách vừa nói
+- Không giải thích dài dòng nếu khách chỉ hỏi ngắn
+- Mỗi tin chỉ nên có 1 ý chính và 1 câu hỏi dẫn tiếp
 - Luôn kết thúc bằng 1 câu hỏi dẫn dắt nếu khách chưa chốt`;
 const FALLBACK_REPLY =
   "Dạ em đã nhận được tin nhắn, bên em sẽ phản hồi sớm ạ.";
@@ -239,6 +244,9 @@ const SALES_PLAYBOOK = `Mẫu trả lời tham khảo để tư vấn tự nhiê
 - Nếu khách hỏi xuất hóa đơn hoặc nội dung chưa có dữ liệu: trả lời "Dạ phần này em xin phép báo lại anh/chị, bên em sẽ kiểm tra và phản hồi sớm ạ."
 - Nếu khách hỏi gọi trực tiếp: mời liên hệ hotline/Zalo 0762234135.
 - Nếu khách chưa biết chọn loại nào: dùng flow gợi ý ngắn gọn giữa ST25, ST21 và Thơm Lài.
+- Nếu chỉ cần hỏi lại nhu cầu: chỉ hỏi 1 câu ngắn, không viết thêm phần mở rộng.
+- Nếu khách hỏi 1 loại gạo cụ thể: trả lời thẳng vào loại đó, không lan sang quá nhiều loại khác.
+- Không gửi đoạn văn dài khi chỉ cần 1 câu trả lời ngắn.
 - Khi có tên gạo, giá, số điện thoại hoặc địa chỉ quan trọng: ưu tiên đặt trên dòng riêng với icon như 🌾 💰 📞 📍 để khách dễ đọc.
 - Có thể làm nổi thông tin quan trọng bằng dạng 【ST25】, 【28.000 đ/kg】, 【0762234135】.
 - Không được nói 504, tồn kho, quy cách bao, thời gian giao cụ thể hoặc cam kết giao nhanh nếu dữ liệu hiện tại chưa xác nhận.`;
@@ -1009,6 +1017,7 @@ async function generateReplyText(session, messageText) {
     model: openaiModel,
     instructions: `${SYSTEM_PROMPT}\n\n${SALES_PLAYBOOK}`,
     input: buildConversationInput(session, messageText),
+    max_output_tokens: openaiMaxOutputTokens,
   });
 
   const replyText = response.output_text?.trim();
