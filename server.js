@@ -359,6 +359,7 @@ function createEmptyOrder() {
   return {
     active: false,
     awaitingConfirmation: false,
+    prefillAnnounced: false,
     editingField: "",
     data: {
       productName: "",
@@ -367,6 +368,14 @@ function createEmptyOrder() {
       phone: "",
       address: "",
     },
+  };
+}
+
+function createEmptyCustomerProfile() {
+  return {
+    recipientName: "",
+    phone: "",
+    address: "",
   };
 }
 
@@ -388,6 +397,7 @@ function getSession(senderId) {
       greeted: false,
       customerTitle: "anh/chị",
       history: [],
+      customerProfile: createEmptyCustomerProfile(),
       order: createEmptyOrder(),
       updatedAt: Date.now(),
     });
@@ -750,6 +760,77 @@ function resetOrder(session) {
   session.order = createEmptyOrder();
 }
 
+function hydrateOrderFromProfile(session) {
+  const { customerProfile, order } = session;
+
+  if (!customerProfile) {
+    return;
+  }
+
+  if (!order.data.recipientName && customerProfile.recipientName) {
+    order.data.recipientName = customerProfile.recipientName;
+  }
+
+  if (!order.data.phone && customerProfile.phone) {
+    order.data.phone = customerProfile.phone;
+  }
+
+  if (!order.data.address && customerProfile.address) {
+    order.data.address = customerProfile.address;
+  }
+}
+
+function syncCustomerProfileFromOrder(session) {
+  const { customerProfile, order } = session;
+
+  if (!customerProfile) {
+    return;
+  }
+
+  if (order.data.recipientName) {
+    customerProfile.recipientName = order.data.recipientName;
+  }
+
+  if (order.data.phone) {
+    customerProfile.phone = order.data.phone;
+  }
+
+  if (order.data.address) {
+    customerProfile.address = order.data.address;
+  }
+}
+
+function buildRememberedFieldsReply(session, nextField) {
+  if (session.order.prefillAnnounced || !session.customerProfile) {
+    return "";
+  }
+
+  const rememberedLines = [];
+
+  if (session.customerProfile.recipientName) {
+    rememberedLines.push(`- Tên người nhận: ${session.customerProfile.recipientName}`);
+  }
+
+  if (session.customerProfile.phone) {
+    rememberedLines.push(`- Số điện thoại: ${session.customerProfile.phone}`);
+  }
+
+  if (session.customerProfile.address) {
+    rememberedLines.push(`- Địa chỉ: ${session.customerProfile.address}`);
+  }
+
+  if (rememberedLines.length === 0) {
+    return "";
+  }
+
+  session.order.prefillAnnounced = true;
+
+  return `Dạ em đang có sẵn:
+${rememberedLines.join("\n")}
+
+${getOrderFieldPrompt(nextField)}`;
+}
+
 function buildNextOrderReply(session) {
   const nextField = getNextOrderField(session.order.data);
 
@@ -771,9 +852,11 @@ Anh/chị xác nhận giúp em để bên em lên đơn ạ.`;
     };
   }
 
-  if (nextField === "productName") {
+  const rememberedFieldsReply = buildRememberedFieldsReply(session, nextField);
+
+  if (rememberedFieldsReply) {
     return {
-      text: getOrderFieldPrompt(nextField),
+      text: rememberedFieldsReply,
     };
   }
 
@@ -785,6 +868,7 @@ Anh/chị xác nhận giúp em để bên em lên đơn ạ.`;
 function startOrder(session, messageText = "") {
   resetOrder(session);
   session.order.active = true;
+  hydrateOrderFromProfile(session);
 
   if (isGenericSt25Mention(messageText)) {
     return buildSt25Reply(true);
@@ -865,6 +949,7 @@ function setOrderFieldValue(session, field, messageText) {
 
 function handleOrderStep(session, messageText) {
   hydrateOrderFromMessage(session.order.data, messageText);
+  syncCustomerProfileFromOrder(session);
 
   if (session.order.editingField === "select") {
     const field = detectOrderFieldFromText(messageText);
@@ -890,6 +975,7 @@ function handleOrderStep(session, messageText) {
       return errorReply;
     }
 
+    syncCustomerProfileFromOrder(session);
     session.order.editingField = "";
     return buildNextOrderReply(session);
   }
@@ -906,6 +992,7 @@ function handleOrderStep(session, messageText) {
       )
     ) {
       console.log("order lead captured:", session.order.data);
+      syncCustomerProfileFromOrder(session);
       const confirmationText = `Dạ em đã ghi nhận đơn của anh/chị rồi ạ.
 
 Bên em sẽ liên hệ xác nhận sớm qua số ${session.order.data.phone}.
@@ -947,6 +1034,7 @@ Anh/chị để ý điện thoại giúp em nhé.`;
     return errorReply;
   }
 
+  syncCustomerProfileFromOrder(session);
   return buildNextOrderReply(session);
 }
 
