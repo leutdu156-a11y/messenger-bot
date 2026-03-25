@@ -11,6 +11,7 @@ Required environment variables:
 - `OPENAI_MODEL`
 
 Optional order integrations:
+- `BOT_ENABLED`: đặt `false` nếu muốn bot mặc định tắt sau mỗi lần deploy
 - `ADMIN_NOTIFY_PSID`: PSID admin để page gửi tin nhắn báo có đơn mới
 - `ADMIN_REGISTER_CODE`: mã bí mật cho lệnh chat `đăng ký admin <mã>`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`: ID file Google Sheet nhận đơn
@@ -25,3 +26,4 @@ Notes:
 - Keep secrets in the Render environment settings, not in code.
 - Muốn admin cố định không mất sau redeploy: đặt `ADMIN_NOTIFY_PSID` trên Render.
 - Muốn lấy PSID của tài khoản đang chat: nhắn `psid của tôi` vào fanpage.
+- Muốn bật/tắt bot bằng chat admin: dùng `bật bot`, `tắt bot`, `trạng thái bot`.

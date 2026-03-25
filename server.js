@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
 const openaiMaxOutputTokens = 140;
+const botEnabledDefault = process.env.BOT_ENABLED !== "false";
 const configuredAdminNotifyPsid = process.env.ADMIN_NOTIFY_PSID || "";
 const adminRegisterCode = process.env.ADMIN_REGISTER_CODE || "";
 const googleSheetsSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || "";
@@ -133,6 +134,7 @@ const seenMessageIds = new Map();
 const customerSessions = new Map();
 let googleSheetsClientPromise = null;
 let runtimeAdminNotifyPsid = configuredAdminNotifyPsid;
+let runtimeBotEnabled = botEnabledDefault;
 
 const PRODUCT_CATALOG = [
   { name: "Tấm Thơm", price: "14.000 đ/kg", aliases: ["tam thom"] },
@@ -617,6 +619,16 @@ function formatError(error) {
 
 function getAdminNotifyPsid() {
   return runtimeAdminNotifyPsid || configuredAdminNotifyPsid;
+}
+
+function isAdminSender(session) {
+  const adminNotifyPsid = getAdminNotifyPsid();
+
+  return Boolean(adminNotifyPsid) && adminNotifyPsid === session.senderId;
+}
+
+function isBotEnabled() {
+  return runtimeBotEnabled;
 }
 
 function parseGoogleServiceAccountCredentials() {
@@ -1427,6 +1439,24 @@ function isAdminDisableRequest(messageText) {
   return ["huy admin", "tat admin", "admin off"].includes(normalizedText);
 }
 
+function isBotEnableRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return ["bat bot", "mo bot", "bot on"].includes(normalizedText);
+}
+
+function isBotDisableRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return ["tat bot", "dong bot", "bot off"].includes(normalizedText);
+}
+
+function isBotStatusRequest(messageText) {
+  const normalizedText = normalizeText(messageText);
+
+  return ["trang thai bot", "bot status"].includes(normalizedText);
+}
+
 function isMyPsidRequest(messageText) {
   const normalizedText = normalizeText(messageText);
 
@@ -1618,6 +1648,46 @@ async function buildBotResponse(session, messageText, menuPayload) {
     };
   }
 
+  if (isBotStatusRequest(messageText)) {
+    if (!isAdminSender(session)) {
+      return {
+        text: "Dạ lệnh này chỉ dành cho admin ạ.",
+      };
+    }
+
+    return {
+      text: isBotEnabled()
+        ? "Dạ bot đang bật ạ."
+        : "Dạ bot đang tắt ạ.",
+    };
+  }
+
+  if (isBotEnableRequest(messageText)) {
+    if (!isAdminSender(session)) {
+      return {
+        text: "Dạ lệnh này chỉ dành cho admin ạ.",
+      };
+    }
+
+    runtimeBotEnabled = true;
+    return {
+      text: "Dạ em đã bật chatbot lại rồi ạ.",
+    };
+  }
+
+  if (isBotDisableRequest(messageText)) {
+    if (!isAdminSender(session)) {
+      return {
+        text: "Dạ lệnh này chỉ dành cho admin ạ.",
+      };
+    }
+
+    runtimeBotEnabled = false;
+    return {
+      text: "Dạ em đã tắt chatbot tự động rồi ạ.",
+    };
+  }
+
   if (isAdminStatusRequest(messageText)) {
     const currentAdminPsid = getAdminNotifyPsid();
 
@@ -1646,6 +1716,21 @@ async function buildBotResponse(session, messageText, menuPayload) {
 
     return {
       text: "Dạ tài khoản này chưa phải tài khoản admin đang nhận báo đơn ạ.",
+    };
+  }
+
+  if (!isBotEnabled()) {
+    if (isAdminSender(session)) {
+      return {
+        text: "",
+        includeMenu: false,
+      };
+    }
+
+    return {
+      text: "",
+      includeMenu: false,
+      notifyAdminUnhandledReason: "Bot disabled",
     };
   }
 
@@ -1784,6 +1869,23 @@ async function handleMessagingEvent(event) {
 
       if (handled) {
         console.log("admin notified for unhandled message:", { senderId });
+      }
+    } catch (notifyError) {
+      console.error("admin notify failed:", formatError(notifyError));
+    }
+  }
+
+  if (response.notifyAdminUnhandledReason) {
+    try {
+      const handled = await notifyAdminAboutUnhandledMessage({
+        senderId,
+        customerTitle: session.customerTitle,
+        messageText,
+        reason: response.notifyAdminUnhandledReason,
+      });
+
+      if (handled) {
+        console.log("admin notified for bot-disabled message:", { senderId });
       }
     } catch (notifyError) {
       console.error("admin notify failed:", formatError(notifyError));
